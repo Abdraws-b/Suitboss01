@@ -1,0 +1,58 @@
+/* ==========================================================================
+   SUIT BOSS FASHION - BRAND DESIGN SYSTEM
+   ========================================================================== */
+
+:root {
+    /* --- The Atelier Color Palette --- */
+    --color-primary: #0F1A2C;        /* Midnight Navy */
+    --color-secondary: #1C2E24;      /* British Racing Green */
+    --color-accent: #C5A880;         /* Antique Gold / Brushed Brass */
+    --color-bg-canvas: #FBFBFA;      /* Tailor's Chalk Off-White */
+    --color-border-slate: rgba(58, 65, 75, 0.2); /* Soft Wet Slate for fine borders */
+    --text-light:#ffff;
+    /* --- Typography Rules --- */
+    --font-heading: 'Cormorant Garamond', 'Georgia', serif;
+    --font-body: 'Montserrat', sans-serif;
+    
+    --font-size-hero: 4rem;
+    --font-size-h1: 2.5rem;
+    --font-size-h2: 1.75rem;
+    --font-size-body: 1rem;
+    --font-size-h3:1.70rem;
+    --font-size-small: 0.85rem;
+
+    /* --- Layout Constraints (Inspired by Reference UI) --- */
+    --radius-sharp: 0px;
+     --header-bg-hero: transparent; 
+    --radius-pill: 50px;             /* For premium pill buttons like 'Try AI Stylist' alternative labels */
+    --transition-luxury: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --- Base Structural Reset --- */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--color-bg-canvas);
+    color: var(--color-primary);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+}
+/* ==========================================================================
+   TASK 4A — THEME HARDENING NOTE
+   The following token assignments ensure the dark design system is never
+   accidentally overridden by a scroll listener or third-party injection
+   that sets `background-color: white` or `background-color: #fff` on
+   .atelier-header, .internal-header, or .atelier-header.dashboard-mode.
+   All nav background overrides must reference var(--color-primary) only.
+   See main.css for the full ruleset.
+   ========================================================================== */
+
+/* Explicit alias so JS-constructed inline styles can reference this token */
+:root {
+  --header-bg-safe: var(--color-primary);     /* Midnight Navy — the only permitted header fill */
+  --header-bg-hero: transparent;              /* Lookbook hero overlay — never a light colour   */
+}

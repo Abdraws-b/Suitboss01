@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suit Boss Fashion | Premium African Kaftans & Bespoke Atelier</title>
+    <meta name="description"
+        content="Luxury African fashion crafted precisely to your proportions. Explore premium Kaftans, prints, and bespoke tailoring.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Montserrat:wght@300;400;500&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="main.css">
+
+    <!-- Header state rules (base / dashboard-mode / lookbook-mode) live in main.css -->
+
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script type="text/javascript">
+        (function () {
+            // Initialize with your Public Key from the Account -> API Keys tab in your EmailJS Dashboard
+            emailjs.init({ publicKey: "YOUR_EMAILJS_PUBLIC_KEY" });
+        })();
+    </script>
+</head>
+
+<body class="atelier-ambient-bg">
+
+    <div id="atelier-toast-container" aria-live="assertive" class="toast-wrapper"></div>
+    
+    <header class="atelier-header">
+        <div class="header-container">
+            <a href="index.html" class="brand-logo" aria-label="Suit Boss Fashion Home">Suit Boss</a>
+            <nav aria-label="Primary Lookbook Navigation">
+                <ul class="nav-links">
+                    <li><a href="index.html">Lookbook</a></li>
+                    <li><a href="custom-order.html">Bespoke Pre-Order</a></li>
+                    <li><a href="auth.html" id="nav-auth-link" class="js-auth-link">Authorize Entry</a></li>
+                    <li><a href="#dashboard" id="nav-dash-link" class="js-dash-link" style="display: none;">My Account</a></li>
+                    <li><a href="#logout" id="auth-logout-btn" class="nav-logout js-logout-btn" style="display: none;">Sign Out</a></li>
+                </ul>
+            </nav>
+
+            <!-- Mobile hamburger trigger — hidden on desktop, revealed ≤768px.
+                 Controller logic lives in app.js (initMobileDrawer). -->
+            <button
+                type="button"
+                class="atelier-hamburger"
+                id="atelier-hamburger-toggle"
+                aria-label="Open navigation menu"
+                aria-expanded="false"
+                aria-controls="atelier-mobile-drawer"
+            >
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+        </div>
+
+        <!-- Dimming layer behind the drawer; tap to close -->
+        <div class="atelier-drawer-backdrop" id="atelier-drawer-backdrop"></div>
+
+        <!-- Full-screen glass-morphic drawer. Mirrors the desktop nav above
+             exactly so routing stays symmetric, and reuses the same
+             js-auth-link / js-dash-link / js-logout-btn classes so app.js
+             keeps both copies in sync with the live auth state. -->
+        <div class="atelier-mobile-drawer" id="atelier-mobile-drawer" aria-hidden="true">
+            <nav aria-label="Mobile Navigation">
+                <ul class="nav-links drawer-nav-links">
+                    <li><a href="index.html">Lookbook</a></li>
+                    <li><a href="custom-order.html">Bespoke Pre-Order</a></li>
+                    <li><a href="auth.html" class="js-auth-link">Authorize Entry</a></li>
+                    <li><a href="#dashboard" class="js-dash-link" style="display: none;">My Account</a></li>
+                    <li><a href="#logout" class="nav-logout js-logout-btn" style="display: none;">Sign Out</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main-content">
+
+        <section class="hero-stage" aria-label="Suit Boss Core Lookbook">
+            <div class="hero-content">
+                <p class="hero-tagline">Jonathan Made It</p>
+                <h1 class="hero-title">Wear Your Power. Autonomy In Every Stitch.</h1>
+                <a href="custom-order.html" class="btn-premium-pill">Explore Pre-Orders</a>
+            </div>
+        </section>
+
+        <section class="storefront-section" aria-label="Apparel Matrix Collections">
+            <header class="section-header">
+                <h2 class="section-title">Ready-to-Wear Heritage</h2>
+                <p>Select clean silhouettes tailored from curated African prints and premium classic global fabrics.</p>
+            </header>
+
+            <!-- PHASE 4: Live Lookbook Stream Mount Point
+                 Static cards removed. app.js mounts a real-time onSnapshot
+                 listener here that renders collection cards from Firestore.
+                 The CTA bespoke card is always appended as the final item. -->
+            <div class="atelier-grid" id="lookbook-grid-mount" aria-live="polite" aria-label="Live collection registry">
+                <!-- Dynamic content injected by mountLookbookStream() in app.js -->
+                <div style="grid-column: 1/-1; padding: 5rem 2rem; text-align: center;">
+                    <p style="font-family: var(--font-body); font-size: var(--font-size-small); color: var(--color-accent); text-transform: uppercase; letter-spacing: 0.15em;">
+                        Loading Collections...
+                    </p>
+                </div>
+            </div>
+        </section>
+        
+    </main>
+    <footer class="atelier-footer">
+        <div class="footer-wrapper">
+
+            <div class="footer-column brand-column">
+                <h3 class="footer-logo">Suit Boss</h3>
+                <p class="footer-statement">
+                    Premium contemporary African heritage, cut precisely to your unique proportions. Seamlessly bridging classic textiles with bespoke modern tailoring.
+                </p>
+            </div>
+
+            <div class="footer-column">
+                <h4 class="footer-heading">Collections</h4>
+                <ul class="footer-links">
+                    <li><a href="index.html">The Lookbook</a></li>
+                    <li><a href="#kaftans">Signature Kaftans</a></li>
+                    <li><a href="#shirts">Printed Apparel</a></li>
+                    <li><a href="custom-order.html">Bespoke Commissions</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h4 class="footer-heading">Services</h4>
+                <ul class="footer-links">
+                    <li><a href="#measurement-guide">Measurement Guide</a></li>
+                    <li><a href="#dashboard">Track Order Status</a></li>
+                    <li><a href="#consultations">Tailor Consultations</a></li>
+                    <li><a href="#support">Atelier Support</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column status-column">
+                <h4 class="footer-heading">The Atelier</h4>
+                <p class="footer-meta-text">Accra, Ghana</p>
+                <p class="footer-meta-text">Digital Architecture: Secure Client Module</p>
+                <div class="system-badge">System Status: Operational</div>
+            </div>
+
+        </div>
+
+        <hr class="footer-divider">
+
+        <div class="footer-sub-row">
+            <div class="footer-sub-container">
+                <p>&copy; 2026 Suit Boss Fashion. Crafted in Africa by Ab_owns_it.</p>
+                <p class="footer-philosophy-tag">Autonomy In Every Stitch &bull; Secure Systems</p>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+
+    <script>
+        /**
+         * NAV FIX: Header mode management for index.html SPA hash routing.
+         * When the user navigates to #dashboard the header must switch from
+         * transparent (over the hero) to navy (over the dashboard content).
+         * This runs synchronously so there is zero white-flash between states.
+         */
+        (function() {
+            var header = document.querySelector('.atelier-header');
+            var mainContent = document.getElementById('main-content');
+
+            function applyHeaderMode() {
+                var hash = window.location.hash;
+                if (hash === '#dashboard' || hash === '#account') {
+                    if (header) {
+                        header.classList.add('dashboard-mode');
+                        header.classList.remove('lookbook-mode');
+                    }
+                    if (mainContent) {
+                        mainContent.classList.add('dashboard-active-layout');
+                    }
+                } else {
+                    if (header) {
+                        header.classList.remove('dashboard-mode');
+                        header.classList.add('lookbook-mode');
+                    }
+                    if (mainContent) {
+                        mainContent.classList.remove('dashboard-active-layout');
+                    }
+                }
+            }
+
+            // Apply immediately on page load
+            applyHeaderMode();
+
+            // Re-apply on every hash change
+            window.addEventListener('hashchange', applyHeaderMode);
+        })();
+    </script>
+
+    <!-- TASK 2: Ready-To-Wear checkout modal portal mount point.
+         app.js populates and unhides this element when .btn-acquire-piece is clicked.
+         Kept hidden at page load; display toggled entirely by JS. -->
+    <div id="ready-order-modal-portal" class="atelier-modal-portal" style="display: none;"></div>
+
+</body>
+
+</html>

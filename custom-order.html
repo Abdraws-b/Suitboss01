@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bespoke Commission Portal | Suit Boss Fashion</title>
+    <meta name="description"
+        content="Configure your exact tailoring blueprints. Submit custom structural measurements directly to our design studio.">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500&family=Montserrat:wght@300;400;500&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="main.css">
+
+    <!-- Header state rules (base / dashboard-mode / lookbook-mode / internal-header)
+         now live exclusively in main.css under "HEADER STATE SYSTEM". The old
+         per-page override block was removed so this page can't silently win
+         the cascade against the canonical CSS file. -->
+
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+    <script type="text/javascript">
+        (function () {
+            // BUG 7 FIXED: publicKey must be your User/Public Key from EmailJS Account → API Keys
+            // NOT your Service ID (service_d1bqr4r belongs in emailjs.send() calls, not here)
+            emailjs.init({ publicKey: "YOUR_EMAILJS_PUBLIC_KEY" });
+        })();
+    </script>
+</head>
+
+<body>
+
+    <header class="atelier-header">
+        <div class="header-container">
+            <a href="index.html" class="brand-logo" aria-label="Suit Boss Fashion Home">Suit Boss</a>
+            <nav aria-label="Primary Lookbook Navigation">
+                <ul class="nav-links">
+                    <li><a href="index.html">Lookbook</a></li>
+                    <li><a href="custom-order.html">Bespoke Pre-Order</a></li>
+                    <li><a href="auth.html" id="nav-auth-link" class="js-auth-link">Authorize Entry</a></li>
+                    <li><a href="#dashboard" id="nav-dash-link" class="js-dash-link" style="display: none;">My Account</a></li>
+                    <li><a href="#logout" id="auth-logout-btn" class="nav-logout js-logout-btn" style="display: none;">Sign Out</a>
+                    </li>
+                </ul>
+            </nav>
+
+            <!-- Mobile hamburger trigger — hidden on desktop, revealed ≤768px.
+                 Controller logic lives in app.js (initMobileDrawer). -->
+            <button
+                type="button"
+                class="atelier-hamburger"
+                id="atelier-hamburger-toggle"
+                aria-label="Open navigation menu"
+                aria-expanded="false"
+                aria-controls="atelier-mobile-drawer"
+            >
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+        </div>
+
+        <!-- Dimming layer behind the drawer; tap to close -->
+        <div class="atelier-drawer-backdrop" id="atelier-drawer-backdrop"></div>
+
+        <!-- Full-screen glass-morphic drawer, mirrors the desktop nav exactly -->
+        <div class="atelier-mobile-drawer" id="atelier-mobile-drawer" aria-hidden="true">
+            <nav aria-label="Mobile Navigation">
+                <ul class="nav-links drawer-nav-links">
+                    <li><a href="index.html">Lookbook</a></li>
+                    <li><a href="custom-order.html">Bespoke Pre-Order</a></li>
+                    <li><a href="auth.html" class="js-auth-link">Authorize Entry</a></li>
+                    <li><a href="#dashboard" class="js-dash-link" style="display: none;">My Account</a></li>
+                    <li><a href="#logout" class="nav-logout js-logout-btn" style="display: none;">Sign Out</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main-content">
+
+        <div id="atelier-toast-container" aria-live="assertive" class="toast-wrapper"></div>
+
+        <section class="form-canopy">
+            <p class="canopy-sub">Bespoke Configuration Engine</p>
+            <h1 class="canopy-title">The Proportions Blueprint</h1>
+            <p class="canopy-desc">
+                Provide your accurate dimensions in centimeters ($\text{cm}$). These parameters safely compile into an
+                isolated configuration object directly linked to your order ledger.
+            </p>
+        </section>
+
+        <section class="measurement-stage">
+            <form id="bespoke-proportion-form" class="measurement-form-grid" novalidate>
+
+                <fieldset class="form-tier">
+                    <legend class="tier-heading">01. Upper Body Parameters</legend>
+
+                    <div class="input-cell">
+                        <label for="measure-neck">Neck Circumference ($\text{cm}$)</label>
+                        <input type="number" id="measure-neck" name="neck" min="30" max="60" placeholder="e.g. 42"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-chest">Chest Width ($\text{cm}$)</label>
+                        <input type="number" id="measure-chest" name="chest" min="80" max="150" placeholder="e.g. 104"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-shoulder">Shoulder to Shoulder ($\text{cm}$)</label>
+                        <input type="number" id="measure-shoulder" name="shoulder" min="35" max="65"
+                            placeholder="e.g. 48" required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-sleeve">Sleeve Reach ($\text{cm}$)</label>
+                        <input type="number" id="measure-sleeve" name="sleeve" min="50" max="80" placeholder="e.g. 64"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+                </fieldset>
+
+                <fieldset class="form-tier">
+                    <legend class="tier-heading">02. Lower Body Parameters</legend>
+
+                    <div class="input-cell">
+                        <label for="measure-waist">True Waist ($\text{cm}$)</label>
+                        <input type="number" id="measure-waist" name="waist" min="60" max="140" placeholder="e.g. 88"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-hips">Hip Perimeter ($\text{cm}$)</label>
+                        <input type="number" id="measure-hips" name="hips" min="80" max="160" placeholder="e.g. 102"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-outseam">Outseam Drop ($\text{cm}$)</label>
+                        <input type="number" id="measure-outseam" name="outseam" min="80" max="130"
+                            placeholder="e.g. 106" required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-inseam">Inseam Profile ($\text{cm}$)</label>
+                        <input type="number" id="measure-inseam" name="inseam" min="60" max="100" placeholder="e.g. 78"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+                </fieldset>
+
+                <fieldset class="form-tier">
+                    <legend class="tier-heading">03. Atelier Specification</legend>
+
+                    <div class="input-cell">
+                        <label for="order-style">Apparel Silhouette</label>
+                        <select id="order-style" name="style" required>
+                            <option value="" disabled selected>Select Garment Blueprint</option>
+                            <option value="signature-kaftan">Signature Custom Kaftan</option>
+                            <option value="bespoke-two-piece">Premium Two-Piece Suit</option>
+                            <option value="luxury-agbada">Royal Agbada Masterpiece</option>
+                            <option value="printed-apparel">Printed Contemporary Shirt</option>
+                        </select>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="order-fabric">Fabric Selection</label>
+                        <select id="order-fabric" name="fabric" required>
+                            <option value="" disabled selected>Select Textile Profile</option>
+                            <option value="premium-wool">Super 120s Premium Wool</option>
+                            <option value="polished-linen">Polished Tropical Linen</option>
+                            <option value="luxury-brocade">Hand-Woven Luxury Brocade</option>
+                            <option value="deluxe-cotton">High-Thread Deluxe Cotton</option>
+                        </select>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+                </fieldset>
+
+                <div class="form-submission-anchor">
+                    <button type="submit" class="btn-premium-pill submit-action">Lock Architecture & Place
+                        Commission</button>
+                </div>
+
+            </form>
+        </section>
+    </main>
+
+    <footer class="atelier-footer">
+        <div class="footer-wrapper">
+
+            <div class="footer-column brand-column">
+                <h3 class="footer-logo">Suit Boss</h3>
+                <p class="footer-statement">
+                    Premium contemporary African heritage, cut precisely to your unique proportions. Seamlessly bridging
+                    classic textiles with bespoke modern tailoring.
+                </p>
+            </div>
+
+            <div class="footer-column">
+                <h4 class="footer-heading">Collections</h4>
+                <ul class="footer-links">
+                    <li><a href="index.html">The Lookbook</a></li>
+                    <li><a href="#kaftans">Signature Kaftans</a></li>
+                    <li><a href="#shirts">Printed Apparel</a></li>
+                    <li><a href="custom-order.html">Bespoke Commissions</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column">
+                <h4 class="footer-heading">Services</h4>
+                <ul class="footer-links">
+                    <li><a href="#measurement-guide">Measurement Guide</a></li>
+                    <li><a href="#dashboard">Track Order Status</a></li>
+                    <li><a href="#consultations">Tailor Consultations</a></li>
+                    <li><a href="#support">Atelier Support</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-column status-column">
+                <h4 class="footer-heading">The Atelier</h4>
+                <p class="footer-meta-text">Accra, Ghana</p>
+                <p class="footer-meta-text">Digital Architecture: Secure Client Module</p>
+                <div class="system-badge">System Status: Operational</div>
+            </div>
+
+        </div>
+
+        <hr class="footer-divider">
+
+        <div class="footer-sub-row">
+            <div class="footer-sub-container">
+                <p>&copy; 2026 Suit Boss Fashion. Crafted in Africa by Ab_owns_it.</p>
+                <p class="footer-philosophy-tag">Autonomy In Every Stitch &bull; Secure Systems</p>
+            </div>
+        </div>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,2957 @@
+@import url("theme.css");
+
+/* --- Navigation Overlay Layout ---
+   Default/base state is solid Midnight Navy. This covers every sub-page
+   (auth.html, custom-order.html, order-success.html, etc.) automatically,
+   since those pages never apply a modifier class to .atelier-header.
+   The ONLY state that goes transparent is the explicit .lookbook-mode
+   class, applied by JS for the index.html hero overlay. See the
+   "HEADER STATE SYSTEM" block near the end of this file for the
+   canonical mode definitions. --- */
+.atelier-header {
+  position: relative;
+  width: 100%;
+  z-index: 10;
+  padding: 1.5rem 4rem;
+  background-color: var(--color-primary) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: background-color 0.4s ease, border-color 0.4s ease;
+}
+
+.header-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brand-logo {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--color-bg-canvas);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  list-style: none;
+  gap: 3rem;
+}
+
+.nav-links a {
+  color: var(--color-bg-canvas) !important; /* #FBFBFA — Tailor's Chalk Off-White, pinned for contrast in every header state */
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-decoration: none;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid transparent;
+  transition: var(--transition-luxury);
+}
+
+.nav-links a.active,
+.nav-links a:hover {
+  border-bottom: 1px solid #C5A880 !important; /* Antique Gold underline */
+}
+
+/* --- Immersive 100vh Hero Stage --- */
+.hero-stage {
+  position: relative;
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 4rem;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      rgba(0, 0, 0, 0.875),
+      rgba(0, 0, 0, 0.587),
+      rgba(0, 0, 0, 0.684)
+    ),
+    url(/images/suit03.JPG);
+  background-size: cover;
+  background-position: top;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+/* Background Image Layer */
+/* .hero-background-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.65; 
+  z-index: 1;
+  url(https://i.pinimg.com/1200x/61/1a/f7/611af7e3548261545940ff2e2e0412a1.jpg);
+} */
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+  max-width: 700px;
+  color: var(--color-bg-canvas);
+}
+
+.hero-tagline {
+  font-size: var(--font-size-h3font-size-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.25em;
+  color: #fabf6d;
+  margin-bottom: 1rem;
+}
+
+.hero-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-hero);
+  line-height: 1.1;
+  margin-bottom: 1.5rem;
+  font-weight: 400;
+}
+
+/* --- Clean Buttons Architecture --- */
+.btn-premium-pill {
+  display: inline-flex;
+  background-color: var(--color-bg-canvas);
+  color: var(--color-primary);
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.9rem 2.2rem;
+  border: 1px solid var(--color-bg-canvas);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  text-decoration: none;
+  transition: var(--transition-luxury);
+}
+
+.btn-premium-pill:hover {
+  background-color: transparent;
+  color: var(--color-bg-canvas);
+}
+
+/* --- Lookbook E-Commerce Matrix Layout --- */
+.storefront-section {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 6rem 4rem;
+}
+
+.section-header {
+  margin-bottom: 3.5rem;
+}
+
+.section-title {
+  font-size: var(--font-size-h1);
+  font-weight: 400;
+  margin-bottom: 0.5rem;
+}
+
+.atelier-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2.5rem;
+}
+
+.atelier-card {
+  grid-column: span 4;
+  border: 1px solid var(--color-border-slate);
+  background: transparent;
+  transition: var(--transition-luxury);
+  /* CARD ALIGNMENT FIX ------------------------------------------------------
+     Grid rows stretch every card to the tallest card's height (default
+     align-items: stretch on .atelier-grid), but a plain block card just
+     leaves that extra space dangling *after* its content instead of using
+     it. That's what let "Acquire Piece" buttons sit at different heights
+     whenever one card's apparel description/subtitle wrapped to more
+     lines than its neighbours. Turning the card into a column flexbox
+     that fills its full stretched height fixes that at the source. */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.atelier-card:hover {
+  border-color: var(--color-accent);
+}
+
+.product-media {
+  width: 100%;
+  aspect-ratio: 3/4;
+  overflow: hidden;
+  background-color: #eaeaea;
+  flex-shrink: 0; /* never let the image get squashed by the flex column */
+}
+
+.product-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: var(--transition-luxury);
+}
+
+.atelier-card:hover .product-media img {
+  transform: scale(1.03);
+}
+
+.product-details {
+  padding: 1.5rem;
+  /* Fill whatever vertical space is left below the image so the footer
+     action block (below) always has a consistent floor to anchor to. */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.product-name {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h3);
+  font-weight: 400;
+}
+
+/* Clamp the subtitle/apparel description to two lines. This keeps the
+   *natural* height variance between cards small, and — combined with
+   .product-action-footer's margin-top: auto below — guarantees the
+   Acquire Piece buttons land on the exact same baseline across a row
+   even when one description is noticeably longer than another. */
+.product-subtitle {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.product-price {
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* Wraps the size matrix + Acquire Piece button. margin-top: auto pushes
+   this block to the bottom of .product-details regardless of how tall
+   the name/subtitle/meta row above it grew, so every card in a row
+   bottom-aligns its button on the same line. */
+.product-action-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.size-selector-group {
+  border: none;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.size-box {
+  border: 1px solid var(--color-border-slate);
+  padding: 0.4rem 0.8rem;
+  font-size: var(--font-size-small);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   SUIT BOSS FASHION - BRAND ATELIER FOOTER
+   ========================================================================== */
+
+.atelier-footer {
+  background-color: var(--color-primary);
+  color: white;
+  padding: 6rem 4rem 3rem 4rem;
+  border-top: 1px solid var(--color-border-slate);
+  font-family: var(--font-body);
+}
+
+.footer-wrapper {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3rem;
+}
+
+.footer-column {
+  grid-column: span 2;
+}
+
+/* Giving the brand statement asymmetric weight (spanning 4 columns) */
+.footer-column.brand-column {
+  grid-column: span 4;
+}
+
+.footer-column.status-column {
+  grid-column: span 4;
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+/* --- Typography Implementations --- */
+.footer-logo {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--text-light);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+}
+
+.footer-statement {
+  font-size: var(--font-size-small);
+  line-height: 1.7;
+  opacity: 0.65;
+  font-weight: 300;
+  max-width: 320px;
+}
+
+.footer-heading {
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-accent);
+  margin-bottom: 1.5rem;
+  font-weight: 500;
+}
+
+/* --- Links & Navigation Matrices --- */
+.footer-links {
+  list-style: none;
+}
+
+.footer-links li {
+  margin-bottom: 0.85rem;
+}
+
+.footer-links a {
+  font-size: var(--font-size-small);
+  color: var(--text-light);
+  opacity: 0.6;
+  font-weight: 300;
+  transition: var(--transition-luxury);
+}
+
+.footer-links a:hover {
+  opacity: 1;
+  color: var(--color-accent);
+  padding-left: 4px; /* Soft, intentional interaction feedback */
+}
+
+.footer-meta-text {
+  font-size: var(--font-size-small);
+  opacity: 0.6;
+  font-weight: 300;
+  margin-bottom: 0.5rem;
+}
+
+/* Tactile metadata badge to anchor the high-end operational feel */
+.system-badge {
+  margin-top: 1rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+  border: 1px solid rgba(197, 168, 128, 0.3);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-sharp);
+  display: inline-block;
+}
+
+/* --- Bottom Row Formatting --- */
+.footer-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  max-width: 1440px;
+  margin: 4rem auto 2rem auto;
+}
+
+.footer-sub-row {
+  width: 100%;
+}
+
+.footer-sub-container {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-small);
+  opacity: 0.4;
+  font-weight: 300;
+}
+
+.footer-philosophy-tag {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* --- Responsive Adjustments --- */
+@media (max-width: 992px) {
+  .footer-wrapper {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .footer-column {
+    grid-column: span 2 !important;
+  }
+  .footer-column.status-column {
+    text-align: left;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 576px) {
+  .footer-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  .footer-sub-container {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+}
+
+/* ==========================================================================
+   SUIT BOSS FASHION - BESPOKE MEASUREMENT SYSTEM LAYOUTS
+   ========================================================================== */
+
+.internal-header {
+  position: relative !important;
+  background-color: var(--color-primary) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.form-canopy {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 5rem 4rem 3rem 4rem;
+  text-align: center;
+}
+
+.canopy-sub {
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-accent);
+  margin-bottom: 0.5rem;
+}
+
+.canopy-title {
+  font-size: var(--font-size-h1);
+  margin-bottom: 1rem;
+}
+
+.canopy-desc {
+  font-size: var(--font-size-body);
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0 auto;
+  font-weight: 300;
+}
+
+.measurement-stage {
+  max-width: 1440px;
+  margin: 0 auto 6rem auto;
+  padding: 0 4rem;
+}
+
+.measurement-stage select {
+  width: 100%;
+  padding: 1rem;
+  border: 1px solid var(--color-border-slate);
+  background-color: var(--color-bg-canvas);
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: var(--color-primary);
+  outline: none;
+  appearance: none; /* Kills default basic operating system UI styling */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path fill='%230F1A2C' d='M0 3l5 5 5-5z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+.measurement-form-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 3rem;
+}
+
+.form-tier {
+  grid-column: span 6;
+  border: 1px solid var(--color-border-slate);
+  padding: 3rem 2.5rem;
+  background: transparent;
+}
+
+.tier-heading {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--color-primary);
+  padding: 0 1rem;
+  text-transform: capitalize;
+}
+
+.input-cell {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2rem;
+}
+
+.input-cell label {
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-dark);
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.input-cell input {
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--color-border-slate);
+  padding: 0.75rem 0.5rem;
+  font-family: var(--font-body);
+  font-size: var(--font-size-body);
+  color: var(--color-primary);
+  outline: none;
+  transition: var(--transition-luxury);
+}
+
+.input-cell input:focus {
+  border-bottom-color: var(--color-accent);
+}
+
+/* Form Submission Mechanics Anchor Row */
+.form-submission-anchor {
+  grid-column: span 12;
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+}
+
+.submit-action {
+  background-color: var(--color-primary);
+  color: var(--text-light);
+  border-color: var(--color-primary);
+  padding: 1.2rem 4rem;
+}
+
+.submit-action:hover {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+.error-indicator {
+  font-size: 0.75rem;
+  color: #a34848;
+  margin-top: 0.35rem;
+  height: 12px;
+}
+
+/* --- Responsive Layout Rules --- */
+@media (max-width: 992px) {
+  .form-tier {
+    grid-column: span 12;
+  }
+}
+
+/* ==========================================================================
+   SUIT BOSS FASHION - PORTAL SYSTEM STYLES
+   ========================================================================== */
+
+.auth-portal-stage {
+  display: flex;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--color-bg-canvas);
+}
+
+/* --- Left Column: Context Canopy --- */
+.auth-canopy-pane {
+  position: relative;
+  width: 45%;
+  display: flex;
+  align-items: flex-end;
+  padding: 5rem 4rem;
+  background-color: var(--color-primary);
+  overflow: hidden;
+}
+
+.auth-bg-media {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.35;
+  z-index: 1;
+}
+
+.auth-canopy-content {
+  position: relative;
+  z-index: 2;
+  color: var(--color-bg-canvas);
+  max-width: 460px;
+}
+
+.auth-brand-logo {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--text-light);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  text-decoration: none;
+  display: block;
+  margin-bottom: 4rem;
+}
+
+.auth-editorial-headline {
+  font-size: var(--font-size-h1);
+  font-weight: 400;
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+}
+
+.auth-editorial-sub {
+  font-size: var(--font-size-h3);
+  color: var(--text-light);
+  font-weight: 300;
+  opacity: 0.75;
+  line-height: 1.6;
+}
+
+/* --- Right Column: Interaction Form Framework --- */
+.auth-form-pane {
+  width: 55%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+}
+
+.auth-form-wrapper {
+  width: 100%;
+  max-width: 420px;
+}
+
+.auth-pane-header {
+  margin-bottom: 2.5rem;
+}
+
+.auth-pane-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h1);
+  font-weight: 400;
+  margin-bottom: 0.5rem;
+}
+
+.auth-pane-switch {
+  font-size: var(--font-size-small);
+  color: var(--text-muted);
+}
+
+.auth-pane-switch a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+/* --- OAuth Layout Vectors --- */
+.oauth-federation-matrix {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+
+.btn-oauth {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--color-border-slate);
+  border-radius: var(--radius-sharp);
+  padding: 0.85rem 1.5rem;
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: var(--color-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  transition: var(--transition-luxury);
+}
+
+.btn-oauth:hover {
+  border-color: var(--color-primary);
+  background-color: rgba(15, 26, 44, 0.02);
+}
+
+.oauth-icon {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- Visual Separators --- */
+.auth-matrix-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-border-slate);
+  opacity: 0.5;
+}
+
+.divider-text {
+  padding: 0 1rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+}
+
+/* --- Inline Utilities & Control Layouts --- */
+.auth-utilities-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1.5rem;
+  margin-bottom: 2.5rem;
+  font-size: var(--font-size-small);
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  user-select: none;
+}
+
+.checkbox-container input {
+  display: none;
+}
+
+.custom-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--color-border-slate);
+  display: inline-block;
+  transition: var(--transition-luxury);
+}
+
+.checkbox-container input:checked + .custom-checkbox {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.auth-recovery-link {
+  color: var(--text-muted);
+  transition: var(--transition-luxury);
+}
+
+.auth-recovery-link:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.auth-submit-action {
+  width: 100%;
+  padding: 1.1rem;
+  background-color: var(--color-primary);
+  color: var(--text-light);
+  border-color: var(--color-primary);
+}
+
+/* --- Viewport Responsiveness Overrides --- */
+@media (max-width: 992px) {
+  .auth-portal-stage {
+    flex-direction: column;
+  }
+  .auth-canopy-pane {
+    width: 100%;
+    min-height: 300px;
+    padding: 3rem 2rem;
+  }
+  .auth-brand-logo {
+    margin-bottom: 2rem;
+  }
+  .auth-form-pane {
+    width: 100%;
+    padding: 4rem 2rem;
+  }
+}
+
+/* --- Premium Notification System Styles --- */
+.toast-wrapper {
+  position: fixed;
+  top: 10%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 90%;
+  max-width: 450px;
+  pointer-events: none;
+}
+
+.atelier-toast {
+  background-color: var(--color-primary); /* Midnight Navy */
+  color: var(--color-bg-canvas); /* Tailor's Off-White */
+  padding: 1.25rem 2rem;
+  border-left: 3px solid var(--color-accent); /* Antique Gold Accent */
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(-20px);
+  animation: toastFadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Variant color settings if something breaks */
+.atelier-toast.error-alert {
+  border-left-color: #ff4d4d; /* Luxury Crimson for security rejections */
+}
+
+@keyframes toastFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toastFadeOut {
+  to {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+/* --- Atelier Dashboard Layout Grid --- */
+.dashboard-stage {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 4rem 2rem 8rem 2rem;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 4rem;
+}
+
+@media (max-width: 968px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+    gap: 3rem;
+  }
+}
+
+.dashboard-column {
+  background-color: transparent;
+}
+
+/* --- Premium Transaction Status Cards --- */
+.orders-stream-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+.atelier-order-card {
+  border: 1px solid var(--color-border-slate);
+  background-color: var(--color-bg-canvas);
+  padding: 2rem;
+  transition: var(--transition-luxury);
+}
+
+.atelier-order-card:hover {
+  border-color: var(--color-primary);
+  box-shadow: 0 10px 30px rgba(15, 26, 44, 0.03);
+}
+
+.order-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--color-border-slate);
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.order-tracking-tag {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  color: var(--color-primary);
+}
+
+.order-status-badge {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.4rem 0.8rem;
+  border: 1px solid var(--color-border-slate);
+}
+
+/* Dynamic State border tints */
+.order-status-badge[data-status="Pending Studio Review"] {
+  border-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+.order-status-badge[data-status="In Cutting Stage"] {
+  border-color: var(--color-secondary);
+  color: var(--color-secondary);
+}
+
+.order-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--color-primary);
+  margin-bottom: 0.5rem;
+}
+
+.order-textile-meta {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #7f8c8d;
+}
+
+.order-textile-meta span {
+  color: var(--color-primary);
+  font-weight: 400;
+}
+
+.order-card-footer {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--color-border-slate);
+}
+
+.financial-tag {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #7f8c8d;
+}
+
+.invoice-status {
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.empty-state-banner {
+  text-align: center;
+  padding: 4rem 2rem;
+  border: 1px dashed var(--color-border-slate);
+}
+
+/* --- Tailor Shop Admin Workspace --- */
+.admin-wrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-top: 8rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+.admin-banner-row {
+  margin-bottom: 2.5rem;
+}
+
+.admin-panel-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h1);
+  color: var(--color-secondary);
+}
+
+.admin-panel-sub {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #040c34;
+  margin-top: 0.5rem;
+}
+
+.admin-stream-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.admin-order-card {
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  transition: var(--transition-luxury);
+}
+
+.admin-order-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+.admin-order-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1.5fr;
+  gap: 2rem;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .admin-order-row {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+.admin-id-tag {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-light);
+  letter-spacing: 0.05em;
+}
+
+.admin-client-email {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #9a9a9a;
+  margin-top: 0.25rem;
+}
+
+.admin-details-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-details-cell h4 {
+  font-family: var(--font-heading);
+  color: var(--text-light);
+}
+
+.textile-desc {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #9a9a9a;
+}
+
+.admin-pipeline-group-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-pipeline-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pipeline-label {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #7f8c8d;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+/* Luxury Admin Dropdown Elements */
+.status-modifier-dropdown,
+.billing-modifier-dropdown {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #1e1e1e;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.75rem 2.5rem 0.75rem 1rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  border-radius: 4px;
+  position: relative;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%237f8c8d' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+.status-modifier-dropdown:focus,
+.billing-modifier-dropdown:focus {
+  border-color: var(--color-accent);
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(197, 168, 128, 0.15);
+}
+
+.status-modifier-dropdown:hover,
+.billing-modifier-dropdown:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.btn-inspect-metrics {
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 0.5rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: #9a9a9a;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  text-decoration: underline;
+  transition: var(--transition-luxury);
+  align-self: flex-start;
+}
+
+.btn-inspect-metrics:hover,
+.btn-inspect-metrics.active-toggle {
+  color: var(--color-accent);
+}
+
+.admin-metrics-drawer {
+  background-color: #1a1a1a;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  margin-top: 1.5rem;
+  padding: 1.5rem 0 0;
+  animation: fadeInDrawer 0.3s ease-out forwards;
+}
+
+.drawer-inner-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.metric-pill {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: #d8d8d8;
+  background: #1e1e1e;
+  padding: 0.5rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  justify-content: space-between;
+}
+
+.metric-pill span {
+  color: #7f8c8d;
+}
+
+@keyframes fadeInDrawer {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --- Success Gateway Core View --- */
+.success-viewport {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 80vh;
+  padding: 2rem;
+}
+
+/* Utility: used to center the icon/label/ID stack inside .success-card */
+.text-center {
+  text-align: center;
+}
+
+.success-card {
+  background-color: var(--color-primary);
+  color: var(--color-bg-canvas);
+  border: 1px solid rgba(197, 168, 128, 0.2);
+  padding: 4rem 3rem;
+  max-width: 580px;
+  width: 100%;
+  box-shadow: 0 20px 50px rgba(15, 26, 44, 0.15);
+}
+
+.success-icon-wrapper {
+  margin-bottom: 1.5rem;
+}
+
+/* Wraps the receipt label + ID stack; matches the spacing the old
+   .receipt-tracking-box used to provide before the markup dropped it */
+.success-message-block {
+  margin: 2.5rem 0;
+}
+
+.receipt-tracking-box {
+  background-color: #fbfbf9;
+  border: 1px dashed var(--color-border-slate);
+  padding: 1.5rem;
+  margin: 2.5rem 0;
+}
+
+.receipt-label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.receipt-id {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  color: var(--color-bg-canvas);
+  letter-spacing: 0.05em;
+  margin: 0;
+}
+
+.success-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.btn-premium-primary {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+  border: none;
+  padding: 1rem 2rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.btn-premium-primary:hover {
+  background-color: #d4b97a;
+}
+
+.btn-premium-secondary {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-decoration: underline;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: var(--transition-luxury);
+}
+
+.btn-premium-secondary:hover {
+  color: var(--color-bg-canvas);
+}
+
+/* --- Client Dashboard Presentation Rules --- */
+.dashboard-wrapper {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 8rem 4rem 4rem 4rem;
+}
+
+.dashboard-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--color-border-slate);
+  padding-bottom: 1.5rem;
+}
+
+.dash-welcome-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h1);
+  color: var(--color-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.dash-welcome-sub {
+  font-family: var(--font-body);
+  color: #7f8c8d;
+  font-size: var(--font-size-small);
+  margin: 0;
+}
+
+.client-meta-badge {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  background-color: #f0f4f8;
+  color: var(--color-primary);
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+}
+
+.dashboard-grid-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+}
+
+.dashboard-card-pane {
+  background: #ffffff;
+  border: 1px solid var(--color-border-slate);
+  padding: 2.5rem;
+}
+
+.card-pane-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--color-primary);
+  margin: 0 0 0.25rem 0;
+}
+
+.card-pane-sub {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: #95a5a6;
+  margin: 0 0 2rem 0;
+}
+
+/* Inline Modifier Grid */
+.blueprint-input-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.metric-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.metric-input-field label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #34495e;
+  font-weight: 500;
+}
+
+.metric-input-field input {
+  padding: 0.75rem;
+  font-family: var(--font-body);
+  border: 1px solid var(--color-border-slate);
+  background-color: #fbfbf9;
+  outline: none;
+  font-size: 0.9rem;
+  transition: var(--transition-luxury);
+}
+
+.metric-input-field input:focus {
+  border-color: var(--color-accent);
+  background-color: #ffffff;
+}
+
+.btn-dashboard-save {
+  width: 100%;
+  background-color: var(--color-primary);
+  color: #ffffff;
+  border: none;
+  padding: 1rem;
+  font-family: var(--font-body);
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.btn-dashboard-save:hover {
+  background-color: #1c2d42;
+}
+
+/* Client Order Stream Row Layout */
+.orders-stream-box {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.client-order-row-card {
+  border: 1px solid var(--color-border-slate);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background-color: #fbfbf9;
+}
+
+.client-order-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.badge-order-id {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-accent);
+  letter-spacing: 0.05em;
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.client-order-title {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  margin: 0 0 0.25rem 0;
+  color: var(--color-primary);
+}
+
+.client-order-textile {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  margin: 0;
+}
+
+.client-order-status-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.pipeline-indicator-pill {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  background-color: #e2e8f0;
+  color: #4a5568;
+  padding: 0.35rem 0.75rem;
+  font-weight: 500;
+}
+
+.financial-indicator-pill {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.6rem;
+  font-weight: 600;
+}
+
+.paid-token {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.unpaid-token {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.empty-stream-card {
+  text-align: center;
+  padding: 3rem 1rem;
+  border: 1px dashed var(--color-border-slate);
+}
+
+.empty-stream-card p {
+  font-family: var(--font-body);
+  color: #7f8c8d;
+  font-size: 0.9rem;
+  margin: 0 0 1rem 0;
+}
+
+.inline-atelier-link {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.inline-atelier-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 992px) {
+  .dashboard-grid-layout {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .dashboard-wrapper {
+    padding: 6rem 2rem 2rem 2rem;
+  }
+}
+
+/* --- Real-Time Progress Bar & Status Pill Custom Styles --- */
+.atelier-progress-track {
+  width: 100%;
+  background-color: #e2e8f0;
+  height: 4px;
+  margin-top: 0;
+  overflow: hidden;
+}
+
+.atelier-progress-bar {
+  height: 100%;
+  width: 15%;
+  transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Production State Dynamic Colors */
+.status-pending {
+  background-color: #7f8c8d !important;
+  color: #ffffff;
+}
+.pipeline-indicator-pill.status-pending {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.status-cutting {
+  background-color: #d97706 !important; /* Premium Amber */
+}
+.pipeline-indicator-pill.status-cutting {
+  background-color: #fef3c7;
+  color: #b45309;
+}
+
+.status-fitting {
+  background-color: #2563eb !important; /* Royal Sapphire Blue */
+}
+.pipeline-indicator-pill.status-fitting {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-completed {
+  background-color: #16a34a !important; /* Deep Emerald Green */
+}
+.pipeline-indicator-pill.status-completed {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* ==========================================================================
+   PHASE 3 & 4 UPGRADES — SUIT BOSS FASHION
+   Inventory Matrix, Live Lookbook, Nav Fixes, Header Stability
+   ========================================================================== */
+
+/* ==========================================================================
+   TASK 4A — NAVBAR COLOR GLITCH FIX (COMPLETE AUDIT)
+   RULE: The header background MUST NEVER flip to white or any light tone.
+   The canonical mode definitions (base / .lookbook-mode / .dashboard-mode /
+   .internal-header) now live in one place — the "HEADER STATE SYSTEM" block
+   near the end of this file. The rules retained here are defensive
+   hardening only, guarding against scroll-listener or anchor-jump edge
+   cases that the canonical block doesn't otherwise cover.
+   ========================================================================== */
+
+/* ── STICKY / SCROLL HARDENING ────────────────────────────────────────────────
+   If a scroll listener ever assigns position:sticky or position:fixed to the
+   header, this rule guarantees the background stays deep navy — never white.
+   The !important chain ensures no inline style or scripted class can override. */
+.atelier-header[style*="position: sticky"],
+.atelier-header[style*="position:sticky"],
+.atelier-header[style*="position: fixed"],
+.atelier-header[style*="position:fixed"] {
+  background-color: var(--color-primary) !important;
+}
+
+/* Anchor jumps must NEVER receive .active regardless of JS timing */
+.nav-links a[href="#kaftans"],
+.nav-links a[href="#shirts"],
+.nav-links a[href="#support"],
+.nav-links a[href="#measurement-guide"],
+.nav-links a[href="#consultations"] {
+  border-bottom: none !important;
+}
+
+/* ── NAV LOGOUT BUTTON — preserve luxury tone in all header states ── */
+.nav-logout {
+  color: var(--color-bg-canvas) !important;
+  opacity: 0.75;
+  transition: opacity 0.3s ease;
+}
+
+.nav-logout:hover {
+  opacity: 1;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.5) !important;
+}
+
+/* ── LOOKBOOK SIZE BUTTONS: Phase 4 dynamic size toggles ── */
+.lookbook-size-btn {
+  border: 1px solid var(--color-border-slate);
+  background: transparent;
+  color: var(--color-primary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  min-width: 36px;
+  text-align: center;
+}
+
+.lookbook-size-btn:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary);
+  color: var(--color-bg-canvas);
+}
+
+.lookbook-size-btn.is-active {
+  background-color: var(--color-primary);
+  color: var(--color-bg-canvas);
+  border-color: var(--color-primary);
+}
+
+.lookbook-size-btn.is-unavailable {
+  opacity: 0.28;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+/* Price display — smooth animated value swap */
+.lookbook-price-value {
+  display: inline-block;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* CTA link inside each lookbook card */
+.lookbook-order-cta {
+  display: inline-block;
+  margin-top: 1.2rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
+  text-decoration: none;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--color-border-slate);
+  transition: var(--transition-luxury);
+}
+
+.lookbook-order-cta:hover {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+/* ── PHASE 3: INVENTORY MATRIX PANEL ── */
+
+.inventory-matrix-panel {
+  background-color: #111111;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 2.5rem;
+  margin-bottom: 3rem;
+}
+
+.inventory-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.inventory-panel-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: #e8e8e8;
+  margin: 0 0 0.25rem 0;
+}
+
+.inventory-panel-sub {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #7f8c8d;
+  margin: 0;
+}
+
+.btn-inventory-add {
+  background: transparent;
+  border: 1px solid var(--color-accent);
+  color: var(--color-accent);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.7rem 1.5rem;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+  white-space: nowrap;
+}
+
+.btn-inventory-add:hover {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+/* ── INVENTORY CREATION DRAWER ── */
+.inventory-add-drawer {
+  background-color: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  animation: fadeInDrawer 0.3s ease-out forwards;
+}
+
+.drawer-form-title {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  color: #d8d8d8;
+  margin: 0 0 1.75rem 0;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.inventory-creation-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.inv-form-row {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.inv-form-row--2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  .inv-form-row--2col {
+    grid-template-columns: 1fr;
+  }
+}
+
+.inv-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inv-form-field--full {
+  width: 100%;
+}
+
+.inv-form-field label {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9a9a9a;
+  font-weight: 500;
+}
+
+.inv-form-field input,
+.inv-form-field select {
+  background-color: #222222;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e8e8e8;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  padding: 0.75rem 1rem;
+  outline: none;
+  transition: border-color 0.25s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+}
+
+.inv-form-field input:focus,
+.inv-form-field select:focus {
+  border-color: var(--color-accent);
+  background-color: #262626;
+}
+
+.inv-form-field select {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%237f8c8d' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  cursor: pointer;
+}
+
+/* ── SIZE PRICING BLOCK ── */
+.inv-size-pricing-block {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 1.5rem;
+  background-color: #1e1e1e;
+}
+
+.inv-size-pricing-label {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-accent);
+  margin: 0 0 1rem 0;
+  font-weight: 600;
+}
+
+.inv-size-price-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+}
+
+@media (max-width: 600px) {
+  .inv-size-price-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.inv-size-price-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.inv-size-price-cell label {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #c0c0c0;
+}
+
+.inv-size-price-cell input {
+  width: 100%;
+  background-color: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e8e8e8;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  padding: 0.6rem 0.5rem;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.25s ease;
+}
+
+.inv-size-price-cell input:focus {
+  border-color: var(--color-accent);
+}
+
+/* ── FORM ACTION BUTTONS ── */
+.inv-form-actions {
+  display: flex;
+  gap: 1rem;
+  padding-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-inv-submit {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.9rem 2rem;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.btn-inv-submit:hover:not(:disabled) {
+  background-color: #d4b97a;
+}
+
+.btn-inv-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-inv-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #9a9a9a;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.9rem 1.5rem;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.btn-inv-cancel:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #e8e8e8;
+}
+
+/* ── INVENTORY STREAM GRID (Live Cards) ── */
+.inventory-stream-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.inv-collection-card {
+  background-color: #161616;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.inv-collection-card:hover {
+  border-color: rgba(197, 168, 128, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.inv-card-image-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3/2;
+  overflow: hidden;
+  background-color: #1e1e1e;
+}
+
+.inv-card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.inv-collection-card:hover .inv-card-image {
+  transform: scale(1.04);
+}
+
+.inv-card-stock-badge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 0.3rem 0.6rem;
+}
+
+.badge-in-stock {
+  background-color: rgba(22, 163, 74, 0.85);
+  color: #ffffff;
+}
+
+.badge-out-stock {
+  background-color: rgba(220, 38, 38, 0.85);
+  color: #ffffff;
+}
+
+.inv-card-body {
+  padding: 1.25rem;
+}
+
+.inv-card-name {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  color: #e8e8e8;
+  margin: 0 0 0.2rem 0;
+}
+
+.inv-card-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: #7f8c8d;
+  margin: 0 0 1.25rem 0;
+}
+
+/* ── LIVE PRICE INPUT GRID (on each inv card) ── */
+.inv-card-price-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.inv-card-size-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.inv-card-size-label {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inv-price-live-input {
+  width: 100%;
+  background-color: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #e8e8e8;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  padding: 0.4rem 0.25rem;
+  text-align: center;
+  outline: none;
+  transition: border-color 0.25s ease;
+  border-radius: 2px;
+  /* Remove number spinners for cleaner look */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.inv-price-live-input::-webkit-outer-spin-button,
+.inv-price-live-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.inv-price-live-input:focus {
+  border-color: var(--color-accent);
+  background-color: #242424;
+}
+
+/* Confirmed save flash */
+.inv-price-live-input[style*="border-color: rgb(22, 163, 74)"] {
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
+}
+
+/* ── STOCK TOGGLE BUTTON ── */
+.inv-card-actions {
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  padding-top: 0.75rem;
+}
+
+.btn-inv-toggle-stock {
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9a9a9a;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  width: 100%;
+}
+
+.btn-inv-toggle-stock:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* ── ADMIN ORDERS SECTION WRAPPER ── */
+.admin-orders-section {
+  padding-top: 1rem;
+  padding-bottom: 6rem;
+}
+
+/* ── LOOKBOOK LOADING STATES ── */
+.loading-text {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #9a9a9a;
+  text-align: center;
+}
+
+.loading-mini {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: #9a9a9a;
+}
+
+/* ==========================================================================
+   HEADER STATE SYSTEM — CANONICAL SOURCE OF TRUTH
+   This is the ONLY place mode-specific header backgrounds are defined.
+   Default (no modifier class) = solid Midnight Navy. That covers every
+   sub-page automatically. `.lookbook-mode` is the sole exception, used
+   for the index.html hero overlay.
+   ========================================================================== */
+
+/* dashboard-mode / internal-header: fully opaque navy, locked, no exceptions */
+.atelier-header.dashboard-mode,
+.atelier-header.internal-header {
+  position: relative !important;
+  background-color: var(--color-primary) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* lookbook-mode: transparent hero overlay — the only state allowed to be see-through */
+.atelier-header.lookbook-mode {
+  position: absolute !important;
+  top: 0;
+  left: 0;
+  background-color: transparent !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Fix: hero-stage must not render behind the relative-positioned header in dashboard mode */
+.dashboard-active-layout .hero-stage {
+  display: none;
+}
+
+/* ── RESPONSIVE ADJUSTMENTS: Inventory matrix ── */
+@media (max-width: 992px) {
+  .inventory-stream-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+  .inv-card-price-grid {
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.25rem;
+  }
+  .inv-size-price-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .admin-wrapper {
+    padding-top: 2rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .inventory-panel-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .btn-inventory-add {
+    width: 100%;
+    text-align: center;
+  }
+  .inv-card-price-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .inventory-stream-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ==========================================================================
+   TASK 4B — GLASS CHECKOUT MODAL OVERLAY COMPONENTS
+   Frosted glass RTW order checkout — #ready-order-modal-portal contents
+   ========================================================================== */
+
+/* ── MODAL PORTAL WRAPPER ── */
+.atelier-modal-portal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  pointer-events: none; /* Inactive when display:none; JS sets display:block */
+}
+
+.atelier-modal-portal[style*="display: block"],
+.atelier-modal-portal[style*="display:block"] {
+  pointer-events: auto;
+}
+
+/* ── BACKDROP: Fixed viewport cover with dark amber tint + blur ── */
+.atelier-glass-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 19, 32, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 1.5rem;
+}
+
+/* ── MODAL CARD: Dark frosted glass panel ── */
+.atelier-glass-modal-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background: rgba(20, 20, 20, 0.85);
+  border: 1px solid rgba(197, 168, 128, 0.2);
+  padding: 2.5rem;
+  color: #fff;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation: modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── MODAL HEADER ── */
+.rtw-modal-header {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.15);
+  position: relative;
+}
+
+.rtw-modal-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--color-accent);
+  margin: 0 0 0.4rem 0;
+}
+
+.rtw-modal-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  font-weight: 400;
+  color: #f0ece6;
+  margin: 0;
+  padding-right: 2.5rem; /* clearance for close button */
+}
+
+/* Close button — top-right corner */
+.rtw-modal-close {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  transition: color 0.2s ease;
+}
+
+.rtw-modal-close:hover {
+  color: var(--color-accent);
+}
+
+/* ── CONFIRMATION CHIPS: read-only size + price ── */
+.rtw-modal-confirmation-row {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.rtw-confirmation-chip {
+  flex: 1;
+  min-width: 120px;
+  background: rgba(197, 168, 128, 0.07);
+  border: 1px solid rgba(197, 168, 128, 0.18);
+  padding: 0.85rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.rtw-chip-label {
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.rtw-chip-value {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 600;
+  color: #f0ece6;
+  letter-spacing: 0.03em;
+}
+
+.rtw-price-value {
+  color: var(--color-accent);
+}
+
+/* ── FORM FIELDS ── */
+.rtw-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.rtw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.rtw-label {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+}
+
+.rtw-input {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f0ece6;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  padding: 0.85rem 1rem;
+  outline: none;
+  transition:
+    border-color 0.25s ease,
+    background-color 0.25s ease;
+  width: 100%;
+  resize: none;
+}
+
+.rtw-input:focus {
+  border-color: var(--color-accent);
+  background-color: rgba(197, 168, 128, 0.06);
+  box-shadow: 0 0 0 2px rgba(197, 168, 128, 0.12);
+}
+
+.rtw-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.rtw-textarea {
+  min-height: 80px;
+}
+
+/* ── SUBMIT BUTTON: Antique Gold accent ── */
+.rtw-modal-submit {
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+  border: none;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 1rem 2rem;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+  margin-top: 0.5rem;
+  width: 100%;
+}
+
+.rtw-modal-submit:hover:not(:disabled) {
+  background-color: #d4b97a;
+  box-shadow: 0 8px 20px rgba(197, 168, 128, 0.25);
+}
+
+.rtw-modal-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── SECURITY NOTE ── */
+.rtw-modal-security-note {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center;
+  margin: 1.25rem 0 0 0;
+  line-height: 1.5;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 576px) {
+  .atelier-glass-modal-card {
+    padding: 1.75rem 1.25rem;
+    max-width: 100%;
+  }
+
+  .rtw-modal-confirmation-row {
+    flex-direction: column;
+  }
+
+  .rtw-confirmation-chip {
+    min-width: unset;
+  }
+}
+
+/* ==========================================================================
+   TASK 4B — ACQUIRE PIECE BUTTON: Lookbook card minimalist action button
+   ========================================================================== */
+.btn-acquire-piece {
+  display: block;
+  width: 100%;
+  margin-top: 0.85rem;
+  background-color: var(--color-primary);
+  color: var(--color-bg-canvas);
+  border: 1px solid var(--color-primary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+  text-align: center;
+}
+
+.btn-acquire-piece:hover {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-primary);
+}
+
+/* ==========================================================================
+   TASK 4A — DELETE BUTTON: .btn-delete-inventory — admin inventory card
+   Inherits the inv-card-actions zone; styled with danger crimson micro-border.
+   ========================================================================== */
+.btn-delete-inventory {
+  display: block;
+  width: 100%;
+  margin-top: 0.5rem;
+  background: none;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: rgba(220, 38, 38, 0.75);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-delete-inventory:hover:not(:disabled) {
+  background-color: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.65);
+  color: #ef4444;
+}
+
+.btn-delete-inventory:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── CLIENT ORDER ROW: thumbnail frame alignment ── */
+.client-order-top-row {
+  align-items: flex-start;
+}
+
+/* When a thumbnail is present, give the top row a flex gap so the image
+   sits cleanly left of the meta block. The <img> carries its own inline
+   styles per spec; this provides the structural context. */
+.client-order-top-row img {
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   RESPONSIVE HARDENING — HOME PAGE / LOOKBOOK
+   Pure CSS additions only. No HTML structure, JS routing, Firebase hooks,
+   or class-toggle mechanics are touched. Every selector below targets
+   markup and classes that already exist in index.html / app.js.
+
+   Breakpoints:
+     1024px — Tablet / small laptop
+      768px — Mobile landscape / phablet
+      480px — Mobile portrait (ultimate target)
+
+   Custom properties (--color-primary, --color-accent, --transition-luxury,
+   etc.) are consumed as-is from theme.css — no values are hardcoded where
+   a token already exists.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   D. GLOBAL SAFEGUARD — never let any structural container bleed past
+   the viewport edge, regardless of what a scroll listener or dynamically
+   mounted card injects.
+   -------------------------------------------------------------------------- */
+html,
+body {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* --------------------------------------------------------------------------
+   A. HEADER & MOBILE HAMBURGER + GLASS-MORPHIC DRAWER NAVIGATION SYSTEM
+   -------------------------------------------------------------------------- */
+
+/* --- Hamburger Trigger ----------------------------------------------------
+   Hidden by default (desktop). Revealed only inside the ≤768px media query
+   below. Built from three precision-drawn spans — no stock icon set — that
+   morph into a clean gold "X" when .is-active is toggled by app.js. */
+.atelier-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 60;
+}
+
+.hamburger-line {
+  display: block;
+  width: 24px;
+  height: 1.5px;
+  background-color: var(--color-accent);
+  transition: var(--transition-luxury);
+  transform-origin: center;
+}
+
+.atelier-hamburger.is-active .hamburger-line:nth-child(1) {
+  transform: translateY(6.5px) rotate(45deg);
+}
+
+.atelier-hamburger.is-active .hamburger-line:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+
+.atelier-hamburger.is-active .hamburger-line:nth-child(3) {
+  transform: translateY(-6.5px) rotate(-45deg);
+}
+
+/* Fixed-position variant used on auth.html, which has no .atelier-header
+   bar to sit inside of. A soft glass chip keeps it legible whether it's
+   resting over the dark canopy image or the light form pane beneath it. */
+.atelier-hamburger.auth-hamburger-fixed {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 90;
+  background: rgba(15, 26, 44, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 50%;
+}
+
+/* --- Dimming Backdrop ------------------------------------------------------
+   Sits behind the drawer panel; tapping it closes the menu. */
+.atelier-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 17, 0.45);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 70;
+}
+
+.atelier-drawer-backdrop.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* --- The Glass-Morphic Drawer Panel ---------------------------------------
+   Full-screen slide-in from the right, luxury deceleration curve, authentic
+   frosted-glass fill over the Midnight Navy canvas with a hairline gold
+   dividing border on the leading edge. */
+.atelier-mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh; /* dodges mobile browser chrome jump */
+  background: rgba(15, 26, 44, 0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1px solid rgba(197, 168, 128, 0.15);
+  transform: translateX(100%);
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 80;
+  overflow-y: auto;
+}
+
+.atelier-mobile-drawer.drawer-active {
+  transform: translateX(0);
+}
+
+.atelier-mobile-drawer nav {
+  height: 100%;
+}
+
+.drawer-nav-links {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2.5rem;
+  min-height: 100%;
+  padding: 4rem 2.5rem;
+  list-style: none;
+}
+
+.drawer-nav-links a {
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 7vw, 2.5rem);
+  font-weight: 400;
+  color: var(--text-light);
+  letter-spacing: 0.02em;
+  opacity: 0.82;
+  transition: var(--transition-luxury);
+}
+
+.drawer-nav-links a:hover,
+.drawer-nav-links a.active {
+  opacity: 1;
+  color: var(--color-accent);
+}
+
+/* Locks the underlying page scroll while the drawer is open (belt-and-braces
+   alongside the inline document.body.style.overflow toggle in app.js). */
+body.atelier-drawer-open {
+  overflow: hidden;
+}
+
+@media screen and (max-width: 768px) {
+  .atelier-header {
+    padding: 1rem 1.5rem;
+  }
+
+  .header-container {
+    flex-wrap: nowrap;
+    gap: 1rem;
+  }
+
+  .brand-logo {
+    font-size: var(--font-size-h3);
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+  }
+
+  /* The inline desktop link list is replaced by the drawer above it. */
+  .header-container > nav {
+    display: none;
+  }
+
+  .atelier-hamburger {
+    display: flex;
+    margin-left: auto;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .atelier-header {
+    padding: 0.85rem 1rem;
+  }
+
+  .drawer-nav-links {
+    padding: 3.5rem 1.75rem;
+    gap: 2rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   A-2. SMALL-SCREEN POLISH — AUTH SPLIT PANE & SUCCESS CARD
+   -------------------------------------------------------------------------- */
+@media screen and (max-width: 480px) {
+  .auth-hamburger-fixed {
+    top: 1rem;
+    right: 1rem;
+  }
+
+  .auth-canopy-pane {
+    min-height: 220px;
+    padding: 2.5rem 1.5rem;
+  }
+
+  .auth-editorial-headline {
+    font-size: 1.85rem;
+  }
+
+  .auth-editorial-sub {
+    font-size: var(--font-size-body);
+  }
+
+  .auth-form-pane {
+    padding: 3rem 1.5rem;
+  }
+
+  .success-viewport {
+    padding: 1.25rem;
+  }
+
+  .success-card {
+    padding: 2.75rem 1.5rem;
+  }
+
+  .receipt-id {
+    font-size: 1.3rem;
+    word-break: break-word;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   B. HERO / LOOKBOOK STAGE COVER LAYER
+   -------------------------------------------------------------------------- */
+@media screen and (max-width: 768px) {
+  .hero-stage {
+    height: 100svh; /* dodges mobile browser chrome jump better than 100vh */
+    padding: 0 1.75rem;
+    /* Fixed attachment is a known cause of jank + overflow on mobile Safari */
+    background-attachment: scroll;
+    background-position: center;
+  }
+
+  .hero-content {
+    max-width: 100%;
+  }
+
+  .hero-tagline {
+    font-size: 0.85rem;
+    letter-spacing: 0.2em;
+  }
+
+  .hero-title {
+    font-size: clamp(2.2rem, 7vw, var(--font-size-hero));
+    line-height: 1.15;
+  }
+
+  .hero-content .btn-premium-pill {
+    padding: 0.85rem 1.9rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .hero-stage {
+    padding: 0 1.25rem;
+  }
+
+  .hero-title {
+    font-size: 2.2rem; /* explicit mobile-portrait token per spec */
+  }
+
+  .hero-tagline {
+    letter-spacing: 0.15em;
+    margin-bottom: 0.75rem;
+  }
+}
+
+/* Background hero media — protects aspect ratio across narrow smartphone
+   viewports whenever an <img>/<video> element (rather than a CSS
+   background) is used for the hero or auth canopy layer. */
+.hero-bg-media,
+.auth-bg-media {
+  object-fit: cover;
+  object-position: center;
+}
+
+/* --------------------------------------------------------------------------
+   C. LOOKBOOK PORTFOLIO GRID SYSTEM (.atelier-grid / .atelier-card)
+   -------------------------------------------------------------------------- */
+@media screen and (max-width: 1024px) {
+  .storefront-section {
+    padding: 4.5rem 2.5rem;
+  }
+
+  .atelier-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 2rem;
+  }
+
+  /* Release the fixed 12-col span so cards follow the fluid track sizing
+     established above instead of forcing exactly 3-per-row. */
+  .atelier-card {
+    grid-column: auto;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .storefront-section {
+    padding: 3.5rem 1.5rem;
+  }
+
+  .section-header {
+    margin-bottom: 2.25rem;
+  }
+
+  .section-title {
+    font-size: var(--font-size-h2);
+  }
+
+  .atelier-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.5rem;
+  }
+
+  .product-details {
+    padding: 1.1rem;
+  }
+
+  .product-name {
+    font-size: 1.35rem;
+  }
+
+  .product-meta-row {
+    margin-bottom: 0.75rem;
+  }
+
+  /* Touch target hardening — boutique action controls must clear 44px */
+  .btn-acquire-piece,
+  .size-box {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  /* Single-column stack — the safest guarantee against overlap/compression
+     of card actions, metadata text, images, and badges on narrow phones. */
+  .atelier-grid {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  .product-media {
+    aspect-ratio: 4/3;
+  }
+
+  .product-name {
+    font-size: 1.25rem;
+  }
+
+  .size-selector-group {
+    flex-wrap: wrap;
+  }
+
+  .size-box {
+    padding: 0.5rem 0.9rem;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   FOOTER — fluid collapse to protect the same 480px/768px targets
+   (kept here rather than duplicating the footer's own block above, since
+   it is part of the homepage's below-the-fold layout).
+   -------------------------------------------------------------------------- */
+@media screen and (max-width: 1024px) {
+  .footer-wrapper {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 2.5rem;
+  }
+
+  .footer-column.brand-column {
+    grid-column: span 6;
+  }
+
+  .footer-column.status-column {
+    grid-column: span 6;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .footer-column {
+    grid-column: span 3;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .atelier-footer {
+    padding: 4rem 1.5rem 2.5rem 1.5rem;
+  }
+
+  .footer-wrapper {
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem 1.5rem;
+  }
+
+  .footer-column.brand-column,
+  .footer-column.status-column {
+    grid-column: span 2;
+  }
+
+  .footer-statement {
+    max-width: 100%;
+  }
+
+  .footer-sub-container {
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: center;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .footer-wrapper {
+    grid-template-columns: 1fr;
+  }
+
+  .footer-column.brand-column,
+  .footer-column.status-column,
+  .footer-column {
+    grid-column: span 1;
+  }
+
+  .footer-column.status-column {
+    align-items: flex-start;
+    text-align: left;
+  }
+}

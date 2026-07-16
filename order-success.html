@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Commission Received | Suit Boss Atelier</title>
+    <link rel="stylesheet" href="main.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Montserrat:wght@300;400;500;600&display=swap" rel="stylesheet">
+</head>
+<body class="atelier-ambient-bg">
+    <header class="atelier-header internal-header">
+        <div class="header-container">
+            <a href="index.html" class="brand-logo">Suit Boss</a>
+            <nav aria-label="Primary Navigation">
+                <ul class="nav-links">
+                    <li><a href="index.html">Lookbook</a></li>
+                    <li><a href="custom-order.html">Bespoke Pre-Order</a></li>
+                </ul>
+            </nav>
+
+            <!-- Mobile hamburger trigger — hidden on desktop, revealed ≤768px.
+                 This page doesn't load app.js, so its controller logic lives
+                 in the inline module script at the bottom of this file. -->
+            <button
+                type="button"
+                class="atelier-hamburger"
+                id="atelier-hamburger-toggle"
+                aria-label="Open navigation menu"
+                aria-expanded="false"
+                aria-controls="atelier-mobile-drawer"
+            >
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+                <span class="hamburger-line"></span>
+            </button>
+        </div>
+
+        <!-- Dimming layer behind the drawer; tap to close -->
+        <div class="atelier-drawer-backdrop" id="atelier-drawer-backdrop"></div>
+
+        <!-- Full-screen glass-morphic drawer, mirrors the desktop nav exactly -->
+        <div class="atelier-mobile-drawer" id="atelier-mobile-drawer" aria-hidden="true">
+            <nav aria-label="Mobile Navigation">
+                <ul class="nav-links drawer-nav-links">
+                    <li><a href="index.html">Lookbook</a></li>
+                    <li><a href="custom-order.html">Bespoke Pre-Order</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main class="success-viewport">
+        <section class="success-card text-center">
+            <div class="success-icon-wrapper">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#cca43b" stroke-width="1.5">
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+            </div>
+            
+            <div class="success-message-block">
+                <span class="receipt-label">Commission Reference ID</span>
+                <h2 id="receipt-id-placeholder" class="receipt-id">SB-LOADING</h2>
+            </div>
+            <div class="success-action-group">
+                <button id="btn-success-to-dash" class="btn-premium-primary">View Production Ledger</button>
+                <a href="index.html" class="btn-premium-secondary">Return to Lookbook</a>
+            </div>
+        </section>
+    </main>
+    <script type="module">
+        // ── MOBILE HAMBURGER + GLASS DRAWER CONTROLLER ──────────────────────
+        // Identical logic to initMobileDrawer() in app.js. Duplicated here
+        // (rather than importing app.js) so this lightweight confirmation
+        // page stays fully decoupled from the Firebase bundle.
+        (function initMobileDrawer() {
+            const toggle   = document.getElementById("atelier-hamburger-toggle");
+            const drawer   = document.getElementById("atelier-mobile-drawer");
+            const backdrop = document.getElementById("atelier-drawer-backdrop");
+
+            if (!toggle || !drawer) return;
+
+            function openDrawer() {
+                toggle.classList.add("is-active");
+                toggle.setAttribute("aria-expanded", "true");
+                drawer.classList.add("drawer-active");
+                drawer.setAttribute("aria-hidden", "false");
+                if (backdrop) backdrop.classList.add("is-active");
+                document.body.classList.add("atelier-drawer-open");
+                document.body.style.overflow = "hidden";
+            }
+
+            function closeDrawer() {
+                toggle.classList.remove("is-active");
+                toggle.setAttribute("aria-expanded", "false");
+                drawer.classList.remove("drawer-active");
+                drawer.setAttribute("aria-hidden", "true");
+                if (backdrop) backdrop.classList.remove("is-active");
+                document.body.classList.remove("atelier-drawer-open");
+                document.body.style.overflow = "";
+            }
+
+            toggle.addEventListener("click", () => {
+                drawer.classList.contains("drawer-active") ? closeDrawer() : openDrawer();
+            });
+
+            if (backdrop) backdrop.addEventListener("click", closeDrawer);
+
+            drawer.querySelectorAll("a").forEach((link) => {
+                link.addEventListener("click", closeDrawer);
+            });
+
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && drawer.classList.contains("drawer-active")) {
+                    closeDrawer();
+                }
+            });
+
+            window.addEventListener("resize", () => {
+                if (window.innerWidth > 768 && drawer.classList.contains("drawer-active")) {
+                    closeDrawer();
+                }
+            });
+        })();
+
+        // Read URL query parameters to pluck the newly generated Firestore ID
+        const urlParams = new URLSearchParams(window.location.search);
+        const activeOrderId = urlParams.get('orderRef') || 'PENDING';
+
+        const receiptEl = document.getElementById('receipt-id-placeholder');
+        if (receiptEl) {
+            receiptEl.textContent = `SB-${activeOrderId.toUpperCase()}`;
+        }
+
+        // Direct routing intercept to fire the SPA studio workspace view layer instantly
+        const dashBtn = document.getElementById('btn-success-to-dash');
+        if (dashBtn) {
+            dashBtn.addEventListener('click', () => {
+                // Re-route back to index with hash parameters so your router naturally handles view mounting
+                window.location.href = "index.html#dashboard";
+            });
+        }
+    </script>
+</body>
+</html>
