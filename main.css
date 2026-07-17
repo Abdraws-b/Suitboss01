@@ -119,6 +119,9 @@
 /* --- Clean Buttons Architecture --- */
 .btn-premium-pill {
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   background-color: var(--color-bg-canvas);
   color: var(--color-primary);
   font-size: var(--font-size-small);
@@ -139,7 +142,6 @@
      blow out of its container, however long the text is. */
   max-width: 100%;
   box-sizing: border-box;
-  text-align: center;
   white-space: normal;
 }
 
@@ -255,7 +257,6 @@
   overflow: hidden;
   line-height: 1.4;
 }
-
 .product-price {
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -494,6 +495,7 @@
 
 .measurement-stage select {
   width: 100%;
+  box-sizing: border-box;
   padding: 1rem;
   border: 1px solid var(--color-border-slate);
   background-color: var(--color-bg-canvas);
@@ -511,6 +513,8 @@
   display: grid;
   grid-template-columns: repeat(12, 1fr);
   gap: 3rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .form-tier {
@@ -518,6 +522,8 @@
   border: 1px solid var(--color-border-slate);
   padding: 3rem 2.5rem;
   background: transparent;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .tier-heading {
@@ -618,8 +624,10 @@
   grid-column: span 12;
   display: flex;
   justify-content: center;
+  align-items: center;
   margin-top: 2rem;
   width: 100%;
+  box-sizing: border-box;
   padding: 0 0.5rem;
 }
 
@@ -692,6 +700,10 @@
 
   .form-tier {
     padding: 2rem 1.25rem;
+  }
+
+  .measurement-form-grid {
+    gap: 1.75rem;
   }
 }
 
@@ -966,6 +978,21 @@
   background-color: var(--color-primary);
   color: var(--text-light);
   border-color: var(--color-primary);
+}
+
+/* .btn-premium-pill's default :hover (transparent bg + off-white text) was
+   built for buttons sitting on DARK surfaces — the hero section, where
+   "transparent" reveals a dark image behind it. This button sits on the
+   light .auth-form-pane instead, so that same hover made the background go
+   transparent (revealing the near-white page) while the text went
+   near-white too — button and label both effectively vanished. Matches the
+   already-established .submit-action:hover pattern used on the bespoke
+   commission page for the same reason: gold fill, navy text, full contrast
+   on a light background regardless of state. */
+.auth-submit-action:hover {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-primary);
 }
 
 /* --- Viewport Responsiveness Overrides --- */
