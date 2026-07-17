@@ -131,6 +131,16 @@
   cursor: pointer;
   text-decoration: none;
   transition: var(--transition-luxury);
+  /* Overflow guard: an inline-flex box sizes to fit its label on one line
+     by default, which is exactly what let a long label like the old
+     "Lock Architecture & Place Commission" push past the viewport edge
+     on narrow phones instead of staying centered. max-width + box-sizing
+     means any button using this class will wrap its label rather than
+     blow out of its container, however long the text is. */
+  max-width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  white-space: normal;
 }
 
 .btn-premium-pill:hover {
@@ -183,6 +193,14 @@
   border-color: var(--color-accent);
 }
 
+/* Desktop default for the "Commission Your Exact Proportions" CTA card —
+   matches its old inline grid-column: span 4. Overridden to span the full
+   row (1 / -1) below 1024px; see the LOOKBOOK PORTFOLIO GRID SYSTEM section
+   further down for the tablet/mobile column-count rules themselves. */
+.cta-highlight-card {
+  grid-column: span 4;
+}
+
 .product-media {
   width: 100%;
   aspect-ratio: 3/4;
@@ -232,6 +250,7 @@
 .product-subtitle {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2; 
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
@@ -546,6 +565,8 @@
   display: flex;
   justify-content: center;
   margin-top: 2rem;
+  width: 100%;
+  padding: 0 0.5rem;
 }
 
 .submit-action {
@@ -561,6 +582,12 @@
   color: var(--color-primary);
 }
 
+@media screen and (max-width: 480px) {
+  .submit-action {
+    padding: 1.1rem 2rem;
+  }
+}
+
 .error-indicator {
   font-size: 0.75rem;
   color: #a34848;
@@ -572,6 +599,45 @@
 @media (max-width: 992px) {
   .form-tier {
     grid-column: span 12;
+  }
+}
+
+/* The canopy header and measurement stage were both centered with
+   margin: 0 auto, but their fixed 4rem (64px) horizontal padding was never
+   scaled down for mobile. On a ~390–430px phone that's over 30% of the
+   viewport width eaten by padding on each side, which reads as a
+   cramped, off-balance layout even though the container itself is
+   mathematically centered. Scaling the padding down restores a properly
+   centered, breathable look at phone widths. */
+@media screen and (max-width: 768px) {
+  .form-canopy {
+    padding: 3rem 1.5rem 2rem 1.5rem;
+  }
+
+  .measurement-stage {
+    padding: 0 1.5rem;
+  }
+
+  .form-tier {
+    padding: 2.25rem 1.5rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .form-canopy {
+    padding: 2.5rem 1.25rem 1.75rem 1.25rem;
+  }
+
+  .canopy-title {
+    font-size: 1.9rem;
+  }
+
+  .measurement-stage {
+    padding: 0 1.25rem;
+  }
+
+  .form-tier {
+    padding: 2rem 1.25rem;
   }
 }
 
@@ -2804,27 +2870,47 @@ body.atelier-drawer-open {
 
 /* --------------------------------------------------------------------------
    C. LOOKBOOK PORTFOLIO GRID SYSTEM (.atelier-grid / .atelier-card)
+
+   Deliberately explicit column counts rather than auto-fill/minmax: with
+   auto-fill, the actual column count depends on a live calculation against
+   the card's minmax() floor, the grid gap, and the section's padding —
+   three numbers that are each independently reasonable in isolation but
+   can combine to silently produce 2 columns on a phone. Pinning the exact
+   column count per range removes that ambiguity entirely:
+     • ≤767px            → 1 column   (phones)
+     • 768px – 1024px     → 2 columns  (standard tablets)
+     • ≥1025px (default)  → 3 columns  (.atelier-card grid-column: span 4
+                                          against the base 12-col grid)
    -------------------------------------------------------------------------- */
+
+/* The "Commission Your Exact Proportions" CTA card always spans the full
+   row width below desktop, regardless of the column count in that range. */
 @media screen and (max-width: 1024px) {
+  .cta-highlight-card {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media screen and (min-width: 768px) and (max-width: 1024px) {
   .storefront-section {
     padding: 4.5rem 2.5rem;
   }
 
   .atelier-grid {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(2, 1fr);
     gap: 2rem;
   }
 
-  /* Release the fixed 12-col span so cards follow the fluid track sizing
-     established above instead of forcing exactly 3-per-row. */
+  /* Release the fixed 4-of-12 span so cards fill one of the two explicit
+     tracks above instead of forcing the old 3-per-row desktop math. */
   .atelier-card {
     grid-column: auto;
   }
 }
 
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 767px) {
   .storefront-section {
-    padding: 3.5rem 1.5rem;
+    padding: 3rem 1.5rem;
   }
 
   .section-header {
@@ -2835,21 +2921,41 @@ body.atelier-drawer-open {
     font-size: var(--font-size-h2);
   }
 
+  /* Single-column stack — the deterministic guarantee against overlap or
+     compression of card actions, metadata text, images, and badges on any
+     phone, from the smallest budget Android up through Pro Max-class
+     devices. */
   .atelier-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: 1fr;
     gap: 1.5rem;
   }
 
+  .atelier-card {
+    grid-column: auto;
+  }
+
+  .product-media {
+    aspect-ratio: 4/3;
+  }
+
   .product-details {
-    padding: 1.1rem;
+    padding: 1.25rem;
   }
 
   .product-name {
-    font-size: 1.35rem;
+    font-size: 1.3rem;
   }
 
   .product-meta-row {
     margin-bottom: 0.75rem;
+  }
+
+  .size-selector-group {
+    flex-wrap: wrap;
+  }
+
+  .size-box {
+    padding: 0.5rem 0.9rem;
   }
 
   /* Touch target hardening — boutique action controls must clear 44px */
@@ -2859,31 +2965,6 @@ body.atelier-drawer-open {
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-}
-
-@media screen and (max-width: 480px) {
-  /* Single-column stack — the safest guarantee against overlap/compression
-     of card actions, metadata text, images, and badges on narrow phones. */
-  .atelier-grid {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
-  }
-
-  .product-media {
-    aspect-ratio: 4/3;
-  }
-
-  .product-name {
-    font-size: 1.25rem;
-  }
-
-  .size-selector-group {
-    flex-wrap: wrap;
-  }
-
-  .size-box {
-    padding: 0.5rem 0.9rem;
   }
 }
 
@@ -2953,5 +3034,481 @@ body.atelier-drawer-open {
   .footer-column.status-column {
     align-items: flex-start;
     text-align: left;
+  }
+}
+
+/* ============================================================================
+   ADMIN & CLIENT DASHBOARD PORTAL — MOBILE RESPONSIVENESS
+   Everything mounted into #main-content at the #dashboard / #account hash
+   routes (mountAtelierDashboard in dashboard.js): the client's own ledger +
+   sizing blueprint view, and — for admin/tailor accounts — the workshop
+   terminal (order queue, inventory matrix, financial summary). None of this
+   had dedicated mobile treatment before; the storefront/auth/checkout pages
+   did. This section brings the portal up to the same standard.
+   ============================================================================ */
+
+/* --- A. Shared containers (both client + admin views) --- */
+@media screen and (max-width: 768px) {
+  .dashboard-wrapper {
+    padding: 6.5rem 1.5rem 2.5rem 1.5rem;
+  }
+
+  .admin-wrapper {
+    padding-top: 6.5rem;
+    padding-left: 1.25rem;
+    padding-right: 1.25rem;
+  }
+
+  .dashboard-header-row {
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+
+  .dash-welcome-title {
+    font-size: 1.9rem;
+  }
+
+  .admin-panel-title {
+    font-size: 1.9rem;
+  }
+
+  .dashboard-card-pane {
+    padding: 1.75rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .dashboard-wrapper {
+    padding: 6rem 1.1rem 2rem 1.1rem;
+  }
+
+  .admin-wrapper {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .dash-welcome-title,
+  .admin-panel-title {
+    font-size: 1.6rem;
+  }
+
+  .dashboard-card-pane {
+    padding: 1.4rem;
+  }
+}
+
+/* --- B. Client ledger — sizing blueprint form --- */
+@media screen and (max-width: 600px) {
+  /* Two number-input columns get thumb-cramped once each is under ~140px
+     wide. One column keeps every field a comfortable, unambiguous tap
+     target on any phone. */
+  .blueprint-input-grid {
+    grid-template-columns: 1fr;
+    gap: 1.1rem;
+  }
+}
+
+/* --- C. Admin — Ready-To-Wear toggle summary card --- */
+@media screen and (max-width: 480px) {
+  .admin-summary-grid {
+    flex-wrap: wrap !important;
+  }
+
+  .admin-summary-card {
+    flex-basis: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* --- D. Admin — Financial Summary Matrix ---
+   .financial-matrix-hub is inline-styled with a fixed
+   `grid-template-columns: repeat(3, 1fr)`; an external rule needs
+   !important to win over that inline declaration at the breakpoints
+   where 3 cramped columns stop being readable. */
+@media screen and (max-width: 700px) {
+  .financial-matrix-hub {
+    grid-template-columns: 1fr !important;
+  }
+
+  .fin-metric-block p[id^="fin-metric-"] {
+    font-size: 1.75rem !important;
+  }
+}
+
+/* --- E. Admin — Order queue cards (.admin-order-card / .admin-order-row) ---
+   .admin-order-row already collapses to a single column at 768px; this
+   just tightens the surrounding card padding and gives the top row
+   (order ID + status pill) room to wrap on the narrowest phones. */
+@media screen and (max-width: 480px) {
+  .admin-order-card {
+    padding: 1.25rem;
+  }
+
+  .client-order-top-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+/* --- F. Admin — Inventory Matrix panel + add-collection form --- */
+@media screen and (max-width: 768px) {
+  .inventory-matrix-panel {
+    padding: 1.75rem 1.25rem;
+  }
+
+  .inventory-add-drawer {
+    padding: 1.5rem 1.25rem;
+  }
+}
+
+@media screen and (max-width: 600px) {
+  /* Same fragile auto-fill/minmax pattern the storefront lookbook grid
+     had — pinning it to a single column removes the ambiguity rather
+     than relying on a live width calculation to land on 1 column. */
+  .inventory-stream-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* The read-only 5-size price display on each inventory card was
+     missing the same 3-column safety net its sibling form grid
+     (.inv-size-price-grid) already had at this exact breakpoint. */
+  .inv-card-price-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .drawer-inner-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- G. Touch target hardening across the whole portal ---
+   Matches the 44px minimum already applied to the storefront's size
+   selectors and Acquire Piece buttons. */
+@media screen and (max-width: 768px) {
+  .btn-dashboard-save,
+  .btn-inventory-add,
+  .btn-inv-submit,
+  .btn-inv-cancel,
+  .btn-delete-inventory,
+  .btn-inv-toggle-stock,
+  .btn-send-delivery-note,
+  .status-modifier-dropdown,
+  .billing-modifier-dropdown {
+    min-height: 44px;
+  }
+}
+
+
+/* ============================================================================
+   ADMIN — BOUTIQUE ORDERS LAUNCH CARD, GLASS MODAL, & SCROLLABLE INVENTORY
+   ============================================================================ */
+
+/* --- A. Ready-To-Wear launch card (replaces the old inline-styled toggle
+   button — it no longer swaps state, it opens the modal below) --- */
+.rtw-summary-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex: 1 1 320px;
+  max-width: 420px;
+  text-align: left;
+  cursor: pointer;
+  border: 1px solid rgba(197, 168, 128, 0.22);
+  background: var(--color-primary);
+  color: var(--text-light);
+  border-radius: 6px;
+  padding: 1.1rem 1.3rem;
+  transition: var(--transition-luxury);
+  font-family: inherit;
+}
+
+.rtw-summary-card:hover,
+.rtw-summary-card:focus-visible {
+  border-color: var(--color-accent);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.rtw-summary-card:active {
+  transform: translateY(0);
+}
+
+.rtw-summary-card-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(197, 168, 128, 0.12);
+  color: var(--color-accent);
+}
+
+.rtw-summary-card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rtw-summary-card-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.25rem;
+}
+
+.rtw-summary-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rtw-summary-card-hint {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  opacity: 0.7;
+  margin-top: 0.3rem;
+}
+
+.rtw-summary-card-arrow {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  color: var(--color-accent);
+  opacity: 0.7;
+  transition: var(--transition-luxury);
+}
+
+.rtw-summary-card:hover .rtw-summary-card-arrow {
+  opacity: 1;
+  transform: translateX(3px);
+}
+
+/* Live order-count badge — hidden (display:none) until dashboard.js finds
+   rtwCount > 0 on the financial summary snapshot */
+.rtw-toggle-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: var(--color-accent);
+  color: var(--color-primary);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-primary);
+}
+
+/* --- B. Boutique Orders glass modal --- */
+.admin-glass-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 17, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  z-index: 200;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.admin-glass-modal-backdrop.is-active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.admin-glass-modal {
+  width: 100%;
+  max-width: 920px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 26, 44, 0.86);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(197, 168, 128, 0.25);
+  border-radius: 8px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+  transform: translateY(16px) scale(0.98);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.admin-glass-modal-backdrop.is-active .admin-glass-modal {
+  transform: translateY(0) scale(1);
+}
+
+.admin-glass-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.75rem 2rem;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.18);
+  flex-shrink: 0;
+}
+
+.admin-glass-modal-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.35rem;
+}
+
+.admin-glass-modal-title {
+  font-family: var(--font-heading);
+  font-size: 1.9rem;
+  font-weight: 500;
+  color: var(--text-light);
+  margin: 0 0 0.4rem 0;
+}
+
+.admin-glass-modal-sub {
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+  max-width: 46ch;
+}
+
+.admin-glass-modal-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: transparent;
+  color: var(--text-light);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-luxury);
+}
+
+.admin-glass-modal-close:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  transform: rotate(90deg);
+}
+
+/* The scrollable body — this is the actual "responsive glass scrollable
+   modal" requirement. Header stays put; only the order list scrolls. */
+.admin-glass-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 2rem 2rem 2rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.admin-glass-modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-glass-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-glass-modal-body::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 4px;
+}
+
+.admin-glass-modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(197, 168, 128, 0.7);
+}
+
+/* Order cards render dark (.admin-order-card) inside a light-adjacent admin
+   panel elsewhere, but inside the glass modal they need to read correctly
+   against the frosted navy — the existing dark card styling already suits
+   this context directly, no override needed. */
+
+/* Fully responsive: edge-to-edge sheet on phones instead of a centered card */
+@media screen and (max-width: 700px) {
+  .admin-glass-modal-backdrop {
+    padding: 0;
+  }
+
+  .admin-glass-modal {
+    max-width: 100%;
+    width: 100%;
+    height: 100%;
+    max-height: 100dvh;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .admin-glass-modal-header {
+    padding: 1.5rem 1.25rem;
+  }
+
+  .admin-glass-modal-title {
+    font-size: 1.5rem;
+  }
+
+  .admin-glass-modal-body {
+    padding: 1.25rem 1.25rem 2rem 1.25rem;
+  }
+}
+
+/* --- C. Scrollable inventory matrix ---
+   Caps the collection grid's height so a growing product catalog scrolls
+   within its own panel instead of pushing the rest of the admin dashboard
+   (order queue, financial summary) further and further down the page. */
+.inventory-stream-grid {
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.inventory-stream-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.inventory-stream-grid::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.inventory-stream-grid::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 4px;
+}
+
+.inventory-stream-grid::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(197, 168, 128, 0.7);
+}
+
+@media screen and (max-width: 768px) {
+  .inventory-stream-grid {
+    max-height: 70vh;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .inventory-stream-grid {
+    max-height: 65vh;
+    padding-right: 0.25rem;
   }
 }

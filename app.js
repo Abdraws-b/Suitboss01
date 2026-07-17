@@ -544,8 +544,8 @@ function mountLookbookStream() {
   activeLookbookUnsubscribe = onSnapshot(collectionsQuery, (snapshot) => {
 
     const ctaCard = `
-      <article class="atelier-card"
-        style="grid-column: span 4; background-color: var(--color-secondary); border-color: var(--color-secondary); color: var(--text-light); padding: 3rem 2.5rem; display: flex; flex-direction: column; justify-content: center;">
+      <article class="atelier-card cta-highlight-card"
+        style="background-color: var(--color-secondary); border-color: var(--color-secondary); color: var(--text-light); padding: 3rem 2.5rem; display: flex; flex-direction: column; justify-content: center;">
         <p style="color: var(--color-accent); text-transform: uppercase; font-size: var(--font-size-small); letter-spacing: 0.15em; margin-bottom: 1rem;">Made-To-Measure Engine</p>
         <h3 style="font-family: var(--font-heading); font-size: var(--font-size-h1); color:white; font-weight: 400; line-height: 1.2; margin-bottom: 1.5rem;">Commission Your Exact Proportions</h3>
         <p style="font-size: var(--font-size-body); font-weight: 300; opacity: 0.85; color:white; margin-bottom: 3rem; line-height: 1.6;">Skip generalized structural grids. Submit your precise physical measurement metrics and correspond directly with our master tailors.</p>

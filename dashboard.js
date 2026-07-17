@@ -29,6 +29,14 @@ if (!window.activeMetricsUnsubscribe) {
   window.activeMetricsUnsubscribe = null;
 }
 
+// Ready-To-Wear Boutique Orders modal — its own tracker. The bespoke ledger
+// now stays permanently mounted (see mountAtelierDashboard), so its RTW
+// counterpart can no longer share window.activeDashboardUnsubscribe without
+// the two clobbering each other's listener handle whenever the modal opens.
+if (!window.activeRtwModalUnsubscribe) {
+  window.activeRtwModalUnsubscribe = null;
+}
+
 /**
  * Root Router Hub for Account Workspace
  * Directs traffic based on authorization access parameters
@@ -50,6 +58,13 @@ export async function mountAtelierDashboard(uid) {
     window.activeMetricsUnsubscribe();
     window.activeMetricsUnsubscribe = null;
   }
+  if (window.activeRtwModalUnsubscribe) {
+    window.activeRtwModalUnsubscribe();
+    window.activeRtwModalUnsubscribe = null;
+  }
+  // The boutique orders modal itself, if it happened to be open when the
+  // dashboard remounted, shouldn't survive into the fresh render.
+  closeBoutiqueOrdersModal();
 
   // Fix header color when staging content over transparent areas
   const headerEl = document.querySelector(".atelier-header");
@@ -397,43 +412,32 @@ function mountTailorShopTerminal() {
       </div>
 
       <!-- ═══════════════════════════════════════════════
-           TASK 1: READY-TO-WEAR TOGGLE SUMMARY CARD
-           Minimalist interactive card. Clicking swaps the
-           lower order stream between Bespoke and RTW views.
+           READY-TO-WEAR BOUTIQUE ORDERS — MODAL LAUNCH CARD
+           Clicking opens .admin-glass-modal-backdrop (built by
+           openBoutiqueOrdersModal below) rather than swapping the ledger
+           view inline. The badge reflects the live RTW order count that
+           mountFinancialSummaryMatrix() already computes on every snapshot.
            ═══════════════════════════════════════════════ -->
       <div class="admin-summary-grid" style="display: flex; gap: 1rem; margin-bottom: 1.75rem;">
         <button
           type="button"
           id="rtw-toggle-card"
           class="admin-summary-card rtw-summary-card"
-          data-active="false"
-          style="
-            flex: 1 1 280px;
-            max-width: 340px;
-            text-align: left;
-            cursor: pointer;
-            border: 1px solid var(--color-border-slate);
-            background: var(--color-primary);
-            color: var(--text-light);
-            border-radius: 4px;
-            padding: 1.1rem 1.3rem;
-            transition: var(--transition-luxury);
-          "
         >
-          <p style="
-            margin: 0 0 0.3rem 0;
-            font-family: var(--font-body);
-            font-size: 0.7rem;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: var(--color-accent);
-          ">Boutique Orders</p>
-          <h3 style="margin: 0; font-family: var(--font-heading); font-size: 1.3rem; font-weight: 500;">
-            Ready-To-Wear Boutique Orders
-          </h3>
-          <p style="margin: 0.35rem 0 0 0; font-size: 0.8rem; opacity: 0.75;">
-            <span id="rtw-toggle-card-hint">Tap to view incoming retail orders</span>
-          </p>
+          <span class="rtw-summary-card-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+              <path d="M3 6h18"></path>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+          </span>
+          <span id="rtw-toggle-badge" class="rtw-toggle-badge" style="display: none;">0</span>
+          <span class="rtw-summary-card-body">
+            <span class="rtw-summary-card-eyebrow">Boutique Orders</span>
+            <span class="rtw-summary-card-title">Ready-To-Wear Boutique Orders</span>
+            <span class="rtw-summary-card-hint">Tap to view incoming retail orders</span>
+          </span>
+          <span class="rtw-summary-card-arrow" aria-hidden="true">&#8594;</span>
         </button>
       </div>
 
@@ -675,8 +679,8 @@ function mountTailorShopTerminal() {
            EXISTING: MASTER ORDER LEDGER QUEUE
            ═══════════════════════════════════════════════ -->
       <div class="admin-orders-section">
-        <h2 class="inventory-panel-title" id="admin-orders-section-title" style="margin-bottom: 0.5rem;">Commission Order Ledger</h2>
-        <p class="inventory-panel-sub" id="admin-orders-section-sub" style="margin-bottom: 2rem;">All client bespoke submissions streaming live from the production database.</p>
+        <h2 class="inventory-panel-title" style="margin-bottom: 0.5rem;">Commission Order Ledger</h2>
+        <p class="inventory-panel-sub" style="margin-bottom: 2rem;">All client bespoke submissions streaming live from the production database.</p>
         <div id="admin-orders-stream" class="admin-stream-container">
           <p class="loading-text">Subscribing to master order ledgers...</p>
         </div>
@@ -776,41 +780,104 @@ function mountTailorShopTerminal() {
   // ── LIVE ORDERS STREAM (defaults to Bespoke view) ──
   mountOrdersStream("bespoke");
 
-  // ── TASK 1: READY-TO-WEAR TOGGLE CARD WIRING ──
-  // Clicking swaps the lower admin-orders-stream container between the
-  // Bespoke Commission Ledger and the Ready-To-Wear Boutique registry.
+  // ── READY-TO-WEAR BOUTIQUE ORDERS — MODAL LAUNCH WIRING ──
+  // The master ledger below now permanently shows the Bespoke Commission
+  // Ledger; this card no longer swaps that view in place. Clicking it opens
+  // the dedicated glass, scrollable Boutique Orders modal instead.
   const rtwToggleCard = document.getElementById("rtw-toggle-card");
-  const sectionTitleEl = document.getElementById("admin-orders-section-title");
-  const sectionSubEl = document.getElementById("admin-orders-section-sub");
-  const toggleHintEl = document.getElementById("rtw-toggle-card-hint");
-
   if (rtwToggleCard) {
     rtwToggleCard.addEventListener("click", () => {
-      const isCurrentlyRtw = rtwToggleCard.dataset.active === "true";
-      const nextMode = isCurrentlyRtw ? "bespoke" : "rtw";
-
-      rtwToggleCard.dataset.active = nextMode === "rtw" ? "true" : "false";
-      rtwToggleCard.style.background = nextMode === "rtw" ? "var(--color-accent)" : "var(--color-primary)";
-      rtwToggleCard.style.color = nextMode === "rtw" ? "var(--color-primary)" : "var(--text-light)";
-
-      if (sectionTitleEl) {
-        sectionTitleEl.textContent = nextMode === "rtw"
-          ? "Ready-To-Wear Boutique Orders"
-          : "Commission Order Ledger";
-      }
-      if (sectionSubEl) {
-        sectionSubEl.textContent = nextMode === "rtw"
-          ? "Incoming retail boutique orders flagged for dispatch — shipping details and delivery messaging."
-          : "All client bespoke submissions streaming live from the production database.";
-      }
-      if (toggleHintEl) {
-        toggleHintEl.textContent = nextMode === "rtw"
-          ? "Viewing Boutique Orders — tap to return to Bespoke Ledger"
-          : "Tap to view incoming retail orders";
-      }
-
-      mountOrdersStream(nextMode);
+      openBoutiqueOrdersModal();
     });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// READY-TO-WEAR BOUTIQUE ORDERS MODAL
+//
+// A frosted-glass, scrollable overlay that streams live Ready-To-Wear orders
+// (placed against actual stocked inventory in the public Lookbook, as
+// opposed to bespoke measurement commissions). Built once on first open and
+// reused on subsequent opens; the Firestore listener itself is torn down
+// every time the modal closes so it isn't billing reads while hidden.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Builds and appends the modal shell to <body> if it isn't already there. */
+function ensureBoutiqueOrdersModalShell() {
+  if (document.getElementById("boutique-orders-modal-backdrop")) return;
+
+  const shell = document.createElement("div");
+  shell.innerHTML = `
+    <div
+      class="admin-glass-modal-backdrop"
+      id="boutique-orders-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Ready-To-Wear Boutique Orders"
+      aria-hidden="true"
+    >
+      <div class="admin-glass-modal">
+        <div class="admin-glass-modal-header">
+          <div>
+            <p class="admin-glass-modal-eyebrow">Ready-To-Wear</p>
+            <h2 class="admin-glass-modal-title">Boutique Orders</h2>
+            <p class="admin-glass-modal-sub">Incoming retail orders placed against stocked Lookbook inventory — shipping details and dispatch messaging.</p>
+          </div>
+          <button class="admin-glass-modal-close" id="boutique-orders-modal-close" aria-label="Close boutique orders">&times;</button>
+        </div>
+        <div class="admin-glass-modal-body" id="boutique-orders-modal-stream">
+          <p class="loading-text">Subscribing to boutique order ledgers...</p>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(shell.firstElementChild);
+
+  const backdrop = document.getElementById("boutique-orders-modal-backdrop");
+  const closeBtn = document.getElementById("boutique-orders-modal-close");
+
+  closeBtn.addEventListener("click", closeBoutiqueOrdersModal);
+
+  // Click the dimmed backdrop (not the glass card itself) to dismiss
+  backdrop.addEventListener("click", (e) => {
+    if (e.target === backdrop) closeBoutiqueOrdersModal();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && backdrop.classList.contains("is-active")) {
+      closeBoutiqueOrdersModal();
+    }
+  });
+}
+
+/** Opens the modal and (re)subscribes the live RTW orders stream into it. */
+function openBoutiqueOrdersModal() {
+  ensureBoutiqueOrdersModalShell();
+
+  const backdrop = document.getElementById("boutique-orders-modal-backdrop");
+  const streamEl = document.getElementById("boutique-orders-modal-stream");
+  if (!backdrop || !streamEl) return;
+
+  backdrop.classList.add("is-active");
+  backdrop.setAttribute("aria-hidden", "false");
+  document.body.classList.add("atelier-drawer-open"); // reuses the existing scroll-lock utility
+
+  streamEl.innerHTML = `<p class="loading-text">Subscribing to boutique order ledgers...</p>`;
+  mountReadyToWearOrdersStream(streamEl);
+}
+
+/** Closes the modal and tears down its Firestore listener. */
+function closeBoutiqueOrdersModal() {
+  const backdrop = document.getElementById("boutique-orders-modal-backdrop");
+  if (backdrop) {
+    backdrop.classList.remove("is-active");
+    backdrop.setAttribute("aria-hidden", "true");
+  }
+  document.body.classList.remove("atelier-drawer-open");
+
+  if (window.activeRtwModalUnsubscribe) {
+    window.activeRtwModalUnsubscribe();
+    window.activeRtwModalUnsubscribe = null;
   }
 }
 
@@ -905,6 +972,18 @@ function mountFinancialSummaryMatrix() {
     flashUpdate(revenueEl, formattedRevenue);
     flashUpdate(bespokeEl, bespokeCount.toLocaleString());
     flashUpdate(rtwEl,     rtwCount.toLocaleString());
+
+    // Keep the Boutique Orders launch card's badge in sync with the same
+    // count — no separate listener needed, this snapshot already has it.
+    const badgeEl = document.getElementById("rtw-toggle-badge");
+    if (badgeEl) {
+      if (rtwCount > 0) {
+        badgeEl.textContent = rtwCount > 99 ? "99+" : String(rtwCount);
+        badgeEl.style.display = "inline-flex";
+      } else {
+        badgeEl.style.display = "none";
+      }
+    }
 
   }, (error) => {
     console.error("Financial Summary Matrix stream failure:", error);
@@ -1255,7 +1334,7 @@ function mountReadyToWearOrdersStream(adminStream) {
     orderBy("orderCreatedTimestamp", "desc")
   );
 
-  window.activeDashboardUnsubscribe = onSnapshot(rtwOrdersQuery, (snapshot) => {
+  window.activeRtwModalUnsubscribe = onSnapshot(rtwOrdersQuery, (snapshot) => {
     if (snapshot.empty) {
       adminStream.innerHTML = `<p class="empty-notice" style="color:#7f8c8d; padding: 2rem; text-align:center;">No Ready-To-Wear boutique orders have come in yet.</p>`;
       return;
