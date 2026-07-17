@@ -36,6 +36,47 @@ export function initAuthEngine() {
     if (!authForm) return;
 
     // -----------------------------------------------------------------------
+    // PASSWORD VISIBILITY TOGGLE
+    // Flips the field between type="password" and type="text" so the person
+    // can confirm exactly what they've typed before submitting. Preserves
+    // focus and cursor/selection position across the swap — without that,
+    // clicking the eye icon mid-edit silently drops the caret back to
+    // position 0 in some browsers, which reads as broken.
+    // -----------------------------------------------------------------------
+    const passwordInput  = document.getElementById("auth-password");
+    const passwordToggle = document.getElementById("auth-password-toggle");
+
+    if (passwordInput && passwordToggle && !passwordToggle.dataset.listenerAttached) {
+        passwordToggle.dataset.listenerAttached = "true";
+
+        const showIcon = passwordToggle.querySelector(".pw-icon-show");
+        const hideIcon = passwordToggle.querySelector(".pw-icon-hide");
+
+        passwordToggle.addEventListener("click", () => {
+            const isCurrentlyHidden = passwordInput.type === "password";
+            const selectionStart = passwordInput.selectionStart;
+            const selectionEnd   = passwordInput.selectionEnd;
+            const hadFocus       = document.activeElement === passwordInput;
+
+            passwordInput.type = isCurrentlyHidden ? "text" : "password";
+
+            passwordToggle.setAttribute("aria-pressed", isCurrentlyHidden ? "true" : "false");
+            passwordToggle.setAttribute("aria-label", isCurrentlyHidden ? "Hide password" : "Show password");
+            if (showIcon) showIcon.style.display = isCurrentlyHidden ? "none" : "block";
+            if (hideIcon) hideIcon.style.display = isCurrentlyHidden ? "block" : "none";
+
+            // Restore focus + exact caret/selection so the person can keep typing
+            // right where they left off.
+            if (hadFocus) {
+                passwordInput.focus();
+                if (selectionStart !== null && selectionEnd !== null) {
+                    passwordInput.setSelectionRange(selectionStart, selectionEnd);
+                }
+            }
+        });
+    }
+
+    // -----------------------------------------------------------------------
     // UI STATE TOGGLE  ·  Login ⇆ Register
     // -----------------------------------------------------------------------
     if (toggleLink && !toggleLink.dataset.listenerAttached) {

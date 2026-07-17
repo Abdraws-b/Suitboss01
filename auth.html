@@ -49,7 +49,14 @@
         </div>
 
         <section class="auth-canopy-pane">
-            <img  src="/images/IMG_0378.JPG.jpeg" alt="Tailoring textile close-up background" class="auth-bg-media">
+            <div class="auth-canopy-slideshow" id="auth-canopy-slideshow" aria-hidden="true">
+                <div class="auth-canopy-slide is-active" data-slide-index="0">
+                    <img src="/images/IMG_0378.JPG.jpeg" alt="" class="auth-bg-media">
+                </div>
+                <div class="auth-canopy-slide" data-slide-index="1">
+                    <img src="/images/fashion-illustration.svg" alt="" class="auth-bg-media auth-bg-media--illustration">
+                </div>
+            </div>
             <div class="auth-canopy-content">
                 <a href="index.html" class="auth-brand-logo">Suit Boss</a>
                 <h1 class="auth-editorial-headline">Identity verified. Craftsmanship assured.</h1>
@@ -91,7 +98,26 @@
 
                     <div class="input-cell">
                         <label for="auth-password">Password</label>
-                        <input type="password" id="auth-password" name="password" placeholder="••••••••••••" autocomplete="current-password" required>
+                        <div class="password-input-wrap">
+                            <input type="password" id="auth-password" name="password" placeholder="••••••••••••" autocomplete="current-password" required>
+                            <button
+                                type="button"
+                                class="password-toggle-btn"
+                                id="auth-password-toggle"
+                                aria-label="Show password"
+                                aria-pressed="false"
+                                aria-controls="auth-password"
+                            >
+                                <svg class="pw-icon pw-icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7Z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg class="pw-icon pw-icon-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="display: none;">
+                                    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.4 20.4 0 0 1 5.06-6.06M9.9 4.24A10.6 10.6 0 0 1 12 4c7 0 11 8 11 8a20.4 20.4 0 0 1-3.22 4.44M14.12 14.12a3 3 0 1 1-4.24-4.24"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
@@ -111,6 +137,35 @@
         </section>
 
     </main>
+
+    <script>
+        /**
+         * AUTH CANOPY SLIDESHOW
+         * Crossfades between the canopy's background slides every 3.5s (the
+         * midpoint of the requested 3-4s range). Self-contained and runs
+         * immediately — deliberately not routed through app.js, since this
+         * is decorative presentation with no dependency on Firebase/auth
+         * state, matching the pattern already used for index.html's
+         * header-mode script.
+         */
+        (function () {
+            const slideshow = document.getElementById('auth-canopy-slideshow');
+            if (!slideshow) return;
+
+            const slides = Array.from(slideshow.querySelectorAll('.auth-canopy-slide'));
+            if (slides.length < 2) return;
+
+            let activeIndex = slides.findIndex((slide) => slide.classList.contains('is-active'));
+            if (activeIndex === -1) activeIndex = 0;
+
+            setInterval(() => {
+                const nextIndex = (activeIndex + 1) % slides.length;
+                slides[activeIndex].classList.remove('is-active');
+                slides[nextIndex].classList.add('is-active');
+                activeIndex = nextIndex;
+            }, 3500);
+        })();
+    </script>
 
     <script type="module" src="app.js"></script>
 </body>
