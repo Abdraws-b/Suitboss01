@@ -27,12 +27,52 @@
 }
 
 .brand-logo {
-  font-family: var(--font-heading);
-  font-size: var(--font-size-h2);
-  color: var(--color-bg-canvas);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
+}
+
+/* --- 3D animated brand mark (header nav) ---
+   perspective on the wrapper + preserve-3d/rotateY-rotateX on the image
+   is what actually produces the 3D effect on a flat asset — a real
+   photoreal 3D re-render of the logo isn't something CSS can do, but a
+   perspective-correct tilt reads as genuinely dimensional rather than a
+   flat spin. clamp() keeps it fluidly responsive without needing a
+   separate breakpoint override for every screen size. */
+.brand-logo-3d-wrap {
+  display: inline-block;
+  perspective: 600px;
+}
+
+.brand-logo-img {
+  display: block;
+  height: clamp(30px, 4.5vw, 46px);
+  width: auto;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
+  animation: brandLogoFloat3D 6s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.brand-logo:hover .brand-logo-img {
+  animation-play-state: paused;
+  transform: rotateY(20deg) rotateX(-4deg) scale(1.06);
+}
+
+@keyframes brandLogoFloat3D {
+  0%,
+  100% {
+    transform: rotateY(-12deg) rotateX(3deg);
+  }
+  50% {
+    transform: rotateY(12deg) rotateX(-3deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-logo-img {
+    animation: none;
+  }
 }
 
 .nav-links {
@@ -252,11 +292,11 @@
 .product-subtitle {
   display: -webkit-box;
   -webkit-line-clamp: 2;
-  line-clamp: 2; /* Add this standard property to fix the warning */
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
 }
+
 .product-price {
   font-weight: 500;
   letter-spacing: 0.05em;
@@ -807,14 +847,29 @@
 }
 
 .auth-brand-logo {
-  font-family: var(--font-heading);
-  font-size: var(--font-size-h2);
-  color: var(--text-light);
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  text-decoration: none;
   display: block;
+  text-decoration: none;
   margin-bottom: 4rem;
+}
+
+.auth-brand-logo-3d-wrap {
+  display: inline-block;
+  perspective: 700px;
+}
+
+.auth-brand-logo-img {
+  display: block;
+  height: clamp(52px, 8vw, 88px);
+  width: auto;
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.45));
+  animation: brandLogoFloat3D 6s ease-in-out infinite;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-brand-logo:hover .auth-brand-logo-img {
+  animation-play-state: paused;
+  transform: rotateY(20deg) rotateX(-4deg) scale(1.06);
 }
 
 .auth-editorial-headline {
@@ -1219,6 +1274,28 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  max-height: 620px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.admin-stream-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.admin-stream-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.admin-stream-container::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 4px;
+}
+
+.admin-stream-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(197, 168, 128, 0.7);
 }
 
 .admin-order-card {
@@ -1517,6 +1594,58 @@
   margin: 0 0 0.5rem 0;
 }
 
+/* --- Animated time-of-day greeting ---
+   Replaces the old static "Private Studio Ledger" heading. Each line
+   cascades in with a staggered delay for a smooth, deliberate reveal
+   rather than a flat fade — the eyebrow leads, the greeting follows,
+   the subtitle settles in last. Re-plays naturally every time the client
+   dashboard mounts, since mainContent.innerHTML is rebuilt fresh each time. */
+.dash-greeting-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.4rem;
+  opacity: 0;
+  animation: dashGreetingSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0s forwards;
+}
+
+.dash-greeting-title {
+  opacity: 0;
+  animation: dashGreetingSlideIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.12s forwards;
+}
+
+.dash-greeting-name {
+  color: var(--color-accent);
+  font-style: italic;
+}
+
+.dash-greeting-fade {
+  opacity: 0;
+  animation: dashGreetingSlideIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.24s forwards;
+}
+
+@keyframes dashGreetingSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-greeting-eyebrow,
+  .dash-greeting-title,
+  .dash-greeting-fade {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 .dash-welcome-sub {
   font-family: var(--font-body);
   color: #7f8c8d;
@@ -1615,11 +1744,35 @@
   background-color: #1c2d42;
 }
 
-/* Client Order Stream Row Layout */
+/* Client Order Stream Row Layout — capped height so a growing order
+   history scrolls within its own card instead of stretching the whole
+   dashboard taller with every new commission. */
 .orders-stream-box {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.orders-stream-box::-webkit-scrollbar {
+  width: 8px;
+}
+
+.orders-stream-box::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.orders-stream-box::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 4px;
+}
+
+.orders-stream-box::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(197, 168, 128, 0.7);
 }
 
 .client-order-row-card {
@@ -3319,6 +3472,12 @@ body.atelier-drawer-open {
   .drawer-inner-grid {
     grid-template-columns: 1fr;
   }
+
+  .orders-stream-box,
+  .admin-stream-container {
+    max-height: 65vh;
+    padding-right: 0.25rem;
+  }
 }
 
 /* --- G. Touch target hardening across the whole portal ---
@@ -3650,5 +3809,599 @@ body.atelier-drawer-open {
   .inventory-stream-grid {
     max-height: 65vh;
     padding-right: 0.25rem;
+  }
+}
+
+
+/* ============================================================================
+   REAL-TIME ATELIER CHAT — GLASSMORPHIC MESSAGING WIDGET
+   Built by chat-engine.js (initClientChat / initAdminChat). One shared shell
+   — floating launcher + slide-up panel — with role-specific content inside:
+   a single support thread for clients, a two-pane inbox for staff.
+   ============================================================================ */
+
+.atelier-chat-widget {
+  position: fixed;
+  bottom: 1.75rem;
+  right: 1.75rem;
+  z-index: 150;
+}
+
+/* --- Launcher --- */
+.atelier-chat-launcher {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(197, 168, 128, 0.45);
+  background: rgba(15, 26, 44, 0.72);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.32);
+  transition: var(--transition-luxury);
+}
+
+.atelier-chat-launcher:hover {
+  transform: translateY(-3px);
+  border-color: var(--color-accent);
+}
+
+.atelier-chat-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  background: #c0392b;
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 700;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--color-primary);
+}
+
+/* --- Panel: strong, visible glass — the whole point of this treatment ---
+   Deliberately compact: a support/inbox widget should feel like a quick
+   utility panel living at the corner of the screen, not a second app
+   competing with the dashboard underneath it. */
+.atelier-chat-panel {
+  position: fixed;
+  bottom: 5.25rem;
+  right: 1.75rem;
+  width: 320px;
+  max-width: calc(100vw - 2rem);
+  height: 440px;
+  max-height: calc(100vh - 7rem);
+  display: flex;
+  flex-direction: column;
+  background: rgba(15, 26, 44, 0.82);
+  backdrop-filter: blur(26px) saturate(140%);
+  -webkit-backdrop-filter: blur(26px) saturate(140%);
+  border: 1px solid rgba(197, 168, 128, 0.4);
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  transform: translateY(16px) scale(0.97);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  z-index: 151;
+}
+
+.atelier-chat-panel.is-active {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.atelier-chat-panel-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.22);
+  flex-shrink: 0;
+}
+
+.atelier-chat-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: 0.2rem;
+}
+
+.atelier-chat-title {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--text-light);
+  margin: 0;
+}
+
+.atelier-chat-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: transparent;
+  color: var(--text-light);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-luxury);
+}
+
+.atelier-chat-close:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  transform: rotate(90deg);
+}
+
+.atelier-chat-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* required for the nested scroll region to actually scroll */
+}
+
+/* --- Message thread (client single-thread + admin's active thread pane) --- */
+.chat-thread-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.9rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.chat-thread-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-thread-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-thread-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 3px;
+}
+
+.chat-empty-state,
+.atelier-chat-body .loading-mini {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  margin: auto;
+  padding: 1rem;
+}
+
+.chat-bubble-row {
+  display: flex;
+  position: relative;
+}
+
+.chat-bubble-row.is-mine {
+  justify-content: flex-end;
+}
+
+.chat-bubble {
+  position: relative;
+  max-width: 80%;
+  padding: 0.5rem 0.7rem;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(4px);
+}
+
+.chat-bubble.is-deleted {
+  background: rgba(255, 255, 255, 0.04);
+  border-style: dashed;
+}
+
+.chat-bubble-deleted-text {
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.chat-bubble-row.is-mine .chat-bubble {
+  background: rgba(197, 168, 128, 0.92);
+  border-color: var(--color-accent);
+}
+
+.chat-bubble-text {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--text-light);
+  word-break: break-word;
+  white-space: pre-wrap;
+  padding-right: 1.1rem; /* clears the kebab button on own messages */
+}
+
+.chat-bubble-row.is-mine .chat-bubble-text {
+  color: var(--color-primary);
+}
+
+.chat-bubble-time {
+  display: block;
+  font-size: 0.6rem;
+  margin-top: 0.25rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.chat-bubble-row.is-mine .chat-bubble-time {
+  color: rgba(15, 26, 44, 0.6);
+}
+
+.chat-bubble-edited-tag {
+  font-style: italic;
+}
+
+/* --- Message action kebab (own messages only) --- */
+.chat-bubble-menu-btn {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.35rem;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(15, 26, 44, 0.55);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: var(--transition-luxury);
+}
+
+.chat-bubble-menu-btn:hover {
+  background: rgba(15, 26, 44, 0.12);
+  color: var(--color-primary);
+}
+
+/* --- Floating message context menu (copy / edit / delete / forward) --- */
+.chat-bubble-context-menu {
+  position: fixed;
+  min-width: 150px;
+  max-width: 220px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: rgba(15, 26, 44, 0.94);
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+  border: 1px solid rgba(197, 168, 128, 0.4);
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+  padding: 0.35rem;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.chat-bubble-context-menu[hidden] {
+  display: none;
+}
+
+.chat-bubble-context-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: none;
+  background: transparent;
+  color: var(--text-light);
+  font-family: var(--font-body);
+  font-size: 0.76rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: var(--transition-luxury);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-bubble-context-menu button:hover {
+  background: rgba(197, 168, 128, 0.16);
+}
+
+.chat-bubble-context-menu button.is-danger {
+  color: #e57373;
+}
+
+.chat-bubble-context-menu button.is-danger:hover {
+  background: rgba(229, 115, 115, 0.14);
+}
+
+.chat-bubble-context-menu button svg {
+  flex-shrink: 0;
+}
+
+.chat-menu-label {
+  font-family: var(--font-body);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  padding: 0.35rem 0.6rem 0.1rem 0.6rem;
+}
+
+/* --- Edit-mode composer banner --- */
+.chat-editing-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 1.1rem;
+  background: rgba(197, 168, 128, 0.1);
+  border-top: 1px solid rgba(197, 168, 128, 0.22);
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.chat-editing-banner span {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chat-editing-banner button {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.chat-editing-banner button:hover {
+  color: var(--text-light);
+}
+
+/* --- Input row --- */
+.chat-input-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border-top: 1px solid rgba(197, 168, 128, 0.22);
+  flex-shrink: 0;
+}
+
+.chat-input-row input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 18px;
+  padding: 0.5rem 0.85rem;
+  color: var(--text-light);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  outline: none;
+  transition: var(--transition-luxury);
+}
+
+.chat-input-row input:focus {
+  border-color: var(--color-accent);
+}
+
+.chat-input-row input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.chat-send-btn {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: var(--color-accent);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.chat-send-btn:hover {
+  background: #d8bf98;
+  transform: scale(1.06);
+}
+
+/* --- Admin two-pane inbox layout --- */
+.chat-admin-layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.chat-admin-list {
+  width: 42%;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(197, 168, 128, 0.22);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.chat-admin-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-admin-list::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 3px;
+}
+
+.chat-convo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: transparent;
+  color: var(--text-light);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  width: 100%;
+  transition: var(--transition-luxury);
+}
+
+.chat-convo-item:hover,
+.chat-convo-item.is-active {
+  background: rgba(197, 168, 128, 0.14);
+}
+
+.chat-convo-item.has-unread {
+  background: rgba(197, 168, 128, 0.08);
+}
+
+.chat-convo-email {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-light);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  padding-right: 1.5rem;
+}
+
+.chat-convo-preview {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.chat-convo-unread-dot {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+
+.chat-admin-thread {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.chat-admin-back {
+  display: none; /* revealed only on mobile, see media query below */
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  background: transparent;
+  color: var(--color-accent);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  padding: 0.75rem 1rem 0 1rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* --- Responsive: single-pane-at-a-time inbox on small phones --- */
+@media screen and (max-width: 560px) {
+  .atelier-chat-widget {
+    bottom: 1.1rem;
+    right: 1.1rem;
+  }
+
+  .atelier-chat-panel {
+    right: 0.85rem;
+    left: 0.85rem;
+    width: auto;
+    max-width: none;
+    bottom: 4.75rem;
+    height: min(460px, calc(100vh - 6.5rem));
+  }
+
+  .chat-admin-list,
+  .chat-admin-thread {
+    width: 100%;
+  }
+
+  .chat-admin-list {
+    border-right: none;
+  }
+
+  .chat-admin-thread {
+    display: none;
+  }
+
+  .chat-admin-layout.is-thread-active .chat-admin-list {
+    display: none;
+  }
+
+  .chat-admin-layout.is-thread-active .chat-admin-thread {
+    display: flex;
+  }
+
+  .chat-admin-back {
+    display: flex;
+  }
+}
+
+@media screen and (max-width: 400px) {
+  .atelier-chat-launcher {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atelier-chat-panel {
+    transition: opacity 0.2s ease;
   }
 }

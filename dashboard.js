@@ -13,6 +13,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import { db } from "./app.js";
 import { showAtelierNotification } from "./ui-feedback.js";
+import { initClientChat, initAdminChat, teardownChatWidget } from "./chat-engine.js";
 
 // Ensure global operational tracking hook sits safely at window runtime space
 if (!window.activeDashboardUnsubscribe) {
@@ -41,6 +42,30 @@ if (!window.activeRtwModalUnsubscribe) {
  * Root Router Hub for Account Workspace
  * Directs traffic based on authorization access parameters
  */
+
+/** Returns a time-of-day-appropriate greeting label. */
+function getTimeBasedGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return "Good Morning";
+  if (hour >= 12 && hour < 17) return "Good Afternoon";
+  if (hour >= 17 && hour < 21) return "Good Evening";
+  return "Good Night";
+}
+
+/**
+ * Derives a presentable first name from an email's local part.
+ * "rashlas.mensah@gmail.com" -> "Rashlas", "j_appiah22@..." -> "J" (falls
+ * back gracefully rather than guessing past what the email actually gives).
+ */
+function extractFirstNameFromEmail(email) {
+  if (!email || typeof email !== "string") return "there";
+  const localPart = email.split("@")[0] || "";
+  const match = localPart.match(/^[A-Za-z]+/);
+  const rawName = match ? match[0] : localPart;
+  if (!rawName) return "there";
+  return rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
+}
+
 export async function mountAtelierDashboard(uid) {
   const mainContent = document.getElementById("main-content");
   if (!mainContent) return;
@@ -65,6 +90,10 @@ export async function mountAtelierDashboard(uid) {
   // The boutique orders modal itself, if it happened to be open when the
   // dashboard remounted, shouldn't survive into the fresh render.
   closeBoutiqueOrdersModal();
+
+  // Same for the chat widget — its listeners (thread/list/badge) are all
+  // independent of the streams above and need their own explicit teardown.
+  teardownChatWidget();
 
   // Fix header color when staging content over transparent areas
   const headerEl = document.querySelector(".atelier-header");
@@ -114,9 +143,12 @@ async function renderClientLedgerDashboard(uid) {
     mainContent.innerHTML = `
       <div class="dashboard-wrapper">
         <div class="dashboard-header-row">
-          <div>
-            <h1 class="dash-welcome-title">Private Studio Ledger</h1>
-            <p class="dash-welcome-sub">Manage your anatomical blueprint and track active commissions.</p>
+          <div class="dash-greeting-block">
+            <p class="dash-greeting-eyebrow">Private Studio Ledger</p>
+            <h1 class="dash-welcome-title dash-greeting-title">
+              ${getTimeBasedGreeting()}, <span class="dash-greeting-name">${extractFirstNameFromEmail(profileData.email)}</span>
+            </h1>
+            <p class="dash-welcome-sub dash-greeting-fade">Manage your anatomical blueprint and track active commissions.</p>
           </div>
           <div class="client-meta-badge">Profile: ${profileData.email || 'Bespoke Client'}</div>
         </div>
@@ -386,6 +418,9 @@ async function renderClientLedgerDashboard(uid) {
       console.error("Client side snapshot connection drop error:", err);
       ordersStreamBox.innerHTML = `<p class="error-text">Failed to establish active updates link with streaming servers.<br><small>${err.code || ''}: ${err.message || err}</small></p>`;
     });
+
+    // Real-time studio support chat — floating glass launcher, single thread
+    initClientChat(uid, profileData.email);
 
   } catch (error) {
     console.error("Failure constructing client dashboard layout sheets:", error);
@@ -790,6 +825,9 @@ function mountTailorShopTerminal() {
       openBoutiqueOrdersModal();
     });
   }
+
+  // Real-time client messages — floating glass launcher, multi-conversation inbox
+  initAdminChat();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
