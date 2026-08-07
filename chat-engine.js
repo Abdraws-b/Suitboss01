@@ -52,10 +52,12 @@ export function initClientChat(uid, email) {
       <p class="loading-mini">Loading conversation...</p>
     </div>
     <form class="chat-input-row" id="chat-input-row" autocomplete="off">
-      <input id="chat-input" placeholder="Message the studio..." autocomplete="off" maxlength="1000">
+      <textarea id="chat-input" rows="1" placeholder="Message the studio..." maxlength="1000"></textarea>
       <button type="submit" class="chat-send-btn" aria-label="Send message">${sendIconSvg()}</button>
     </form>
   `;
+
+  wireComposerTextarea(document.getElementById("chat-input"), document.getElementById("chat-input-row"));
 
   const convoRef = doc(db, "conversations", uid);
   const threadEl = document.getElementById("chat-thread-scroll");
@@ -93,6 +95,7 @@ export function initClientChat(uid, email) {
     if (editingMessageId) {
       const messageIdBeingEdited = editingMessageId;
       input.value = "";
+      autoGrowTextarea(input);
       cancelEditing();
       try {
         await updateDoc(doc(db, "conversations", uid, "messages", messageIdBeingEdited), {
@@ -108,6 +111,7 @@ export function initClientChat(uid, email) {
     }
 
     input.value = "";
+    autoGrowTextarea(input);
     try {
       await addDoc(collection(db, "conversations", uid, "messages"), {
         senderId: uid,
@@ -147,7 +151,7 @@ export function initAdminChat() {
           <p class="chat-empty-state">Select a conversation to view messages.</p>
         </div>
         <form class="chat-input-row" id="chat-input-row" style="display: none;" autocomplete="off">
-          <input id="chat-input" placeholder="Type a reply..." autocomplete="off" maxlength="1000">
+          <textarea id="chat-input" rows="1" placeholder="Type a reply..." maxlength="1000"></textarea>
           <button type="submit" class="chat-send-btn" aria-label="Send message">${sendIconSvg()}</button>
         </form>
       </div>
@@ -255,6 +259,9 @@ function openAdminThread(clientId, clientEmail) {
   const freshInputRow = inputRow.cloneNode(true);
   inputRow.replaceWith(freshInputRow);
 
+  const freshTextarea = freshInputRow.querySelector("#chat-input");
+  wireComposerTextarea(freshTextarea, freshInputRow);
+
   freshInputRow.addEventListener("submit", async (e) => {
     e.preventDefault();
     const input = freshInputRow.querySelector("#chat-input");
@@ -267,6 +274,7 @@ function openAdminThread(clientId, clientEmail) {
     if (editingMessageId) {
       const messageIdBeingEdited = editingMessageId;
       input.value = "";
+      autoGrowTextarea(input);
       cancelEditing();
       try {
         await updateDoc(doc(db, "conversations", clientId, "messages", messageIdBeingEdited), {
@@ -282,6 +290,7 @@ function openAdminThread(clientId, clientEmail) {
     }
 
     input.value = "";
+    autoGrowTextarea(input);
     try {
       await addDoc(collection(db, "conversations", clientId, "messages"), {
         senderId: staffUser.uid,
@@ -452,6 +461,7 @@ async function handleBubbleMenuAction(action, messageId) {
     const input = document.getElementById("chat-input");
     if (!input) return;
     input.value = text;
+    autoGrowTextarea(input);
     input.focus();
     editingMessageId = messageId;
     showEditingBanner();
@@ -578,7 +588,45 @@ function cancelEditing() {
   editingMessageId = null;
   removeEditingBanner();
   const input = document.getElementById("chat-input");
-  if (input) input.value = "";
+  if (input) {
+    input.value = "";
+    autoGrowTextarea(input);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPOSER TEXTAREA — autosize + Enter-to-send
+//
+// The composer used to be a single-line <input>, which only ever shows the
+// tail end of anything longer than the visible width — you'd be typing a
+// real message with no way to see most of it. A <textarea> that grows with
+// content (capped, then scrolls internally) fixes that at the source.
+// Wired fresh onto every textarea instance, since the admin thread-switch
+// flow clones the input row (stripping listeners) each time it opens a
+// different client's conversation.
+// ─────────────────────────────────────────────────────────────────────────────
+function wireComposerTextarea(textarea, form) {
+  if (!textarea || !form) return;
+
+  autoGrowTextarea(textarea);
+
+  textarea.addEventListener("input", () => autoGrowTextarea(textarea));
+
+  // Enter sends the message; Shift+Enter inserts a newline, same convention
+  // as every mainstream chat app so it needs no explanation in the UI.
+  textarea.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+}
+
+function autoGrowTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = "auto";
+  const maxHeight = 140; // px — beyond this the textarea scrolls internally instead of growing further
+  textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + "px";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

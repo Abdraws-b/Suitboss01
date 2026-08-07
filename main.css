@@ -292,7 +292,7 @@
 .product-subtitle {
   display: -webkit-box;
   -webkit-line-clamp: 2;
-  line-clamp: 2; 
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.4;
@@ -1380,11 +1380,203 @@
   margin-bottom: 0.5rem;
 }
 
+/* ============================================================================
+   READY-TO-WEAR ORDER CARD — organized structure
+   Replaces the old single 3-column grid (built for the simpler bespoke
+   commission cards) with clearly separated sections: header, contact
+   details, pipeline controls, and delivery dispatch — each divided by a
+   hairline so the card reads top-to-bottom instead of as one dense block.
+   Every text color below is an explicit value against the card's #141414
+   background, not opacity stacked on inherited color, so contrast stays
+   predictable regardless of nesting context.
+   ============================================================================ */
+
+.rtw-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.rtw-card-id-block {
+  min-width: 0;
+}
+
+.rtw-garment-name {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  font-weight: 500;
+  color: var(--text-light);
+  margin: 0.35rem 0 0.2rem 0;
+}
+
+.rtw-card-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 1px solid var(--color-accent);
+  padding: 2px;
+  background: #111;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.rtw-card-thumb--empty {
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.rtw-card-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 1.25rem 0;
+}
+
+/* --- Customer contact block --- */
+.rtw-customer-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rtw-info-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.rtw-info-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-accent);
+  margin-top: 0.1rem;
+}
+
+.rtw-info-text {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  /* Concrete muted value, not opacity — opacity on light text over a dark
+     card stacks with any inherited dimming and is how contrast quietly
+     erodes. This stays exactly as legible however it's nested. */
+  color: #b8b8b8;
+  word-break: break-word;
+}
+
+/* --- Pipeline controls --- */
+.rtw-pipeline-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+/* --- Delivery dispatch section --- */
+.rtw-dispatch-section .pipeline-label {
+  margin-bottom: 0.6rem;
+}
+
+.rtw-dispatch-cell {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+
+.rtw-delivery-dispatcher {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  color-scheme: dark;
+  background: #1e1e1e;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 0.6rem 0.75rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  outline: none;
+  /* Grows with content up to this cap (see autoGrowDispatchTextarea in
+     dashboard.js), then scrolls internally instead of the card stretching
+     indefinitely for a long delivery message. */
+  max-height: 120px;
+  overflow-y: auto;
+  transition: border-color 0.3s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
+}
+
+.rtw-delivery-dispatcher::-webkit-scrollbar {
+  width: 5px;
+}
+
+.rtw-delivery-dispatcher::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 3px;
+}
+
+.rtw-delivery-dispatcher:focus {
+  border-color: var(--color-accent);
+}
+
+.rtw-delivery-dispatcher::placeholder {
+  color: #8a8a8a;
+}
+
+.btn-send-delivery-note {
+  flex-shrink: 0;
+  background: var(--color-accent);
+  color: var(--color-primary);
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.1rem;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.btn-send-delivery-note:hover {
+  background: #d8bf98;
+}
+
+.btn-send-delivery-note:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media screen and (max-width: 560px) {
+  .rtw-pipeline-controls {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .rtw-dispatch-cell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-send-delivery-note {
+    width: 100%;
+  }
+}
+
 /* Luxury Admin Dropdown Elements */
 .status-modifier-dropdown,
 .billing-modifier-dropdown {
   appearance: none;
   -webkit-appearance: none;
+  /* Tells the browser this control belongs in a dark UI — appearance:none
+     only overrides the closed box; without this, some browsers still
+     render the open option-list popup with light native OS chrome
+     regardless, which is exactly the washed-out/low-contrast look this
+     is meant to prevent. */
+  color-scheme: dark;
   background: #1e1e1e;
   color: #ffffff;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -2080,6 +2272,26 @@
   margin: 0;
 }
 
+/* ── LEDGER SECTION HEADERS — light-background context ──────────────────
+   inventory-panel-title/sub above are styled for .inventory-matrix-panel's
+   own #111111 background. The Commission Order Ledger section has no such
+   background — it sits directly on the page's light canvas — so reusing
+   those same near-white colors there made the heading nearly invisible.
+   These are the correctly-contrasted equivalents for that context. */
+.ledger-section-title {
+  font-family: var(--font-heading);
+  font-size: var(--font-size-h2);
+  color: var(--color-secondary);
+  margin: 0 0 0.25rem 0;
+}
+
+.ledger-section-sub {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: #5a6672;
+  margin: 0;
+}
+
 .btn-inventory-add {
   background: transparent;
   border: 1px solid var(--color-accent);
@@ -2713,6 +2925,10 @@
   background-color: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #f0ece6;
+  /* Needed for type="date" inputs (the new delivery-date field) — without
+     this, the native calendar picker icon and popup default to light OS
+     chrome regardless of how dark this input itself is styled. */
+  color-scheme: dark;
   font-family: var(--font-body);
   font-size: 0.9rem;
   padding: 0.85rem 1rem;
@@ -3871,17 +4087,17 @@ body.atelier-drawer-open {
 }
 
 /* --- Panel: strong, visible glass — the whole point of this treatment ---
-   Deliberately compact: a support/inbox widget should feel like a quick
-   utility panel living at the corner of the screen, not a second app
-   competing with the dashboard underneath it. */
+   Sized for an actual reading/typing surface rather than a quick utility
+   popover — the previous compact pass (320×440) made composing anything
+   longer than a short line feel cramped, which is exactly what this fixes. */
 .atelier-chat-panel {
   position: fixed;
-  bottom: 5.25rem;
+  bottom: 5.5rem;
   right: 1.75rem;
-  width: 320px;
+  width: 400px;
   max-width: calc(100vw - 2rem);
-  height: 440px;
-  max-height: calc(100vh - 7rem);
+  height: 600px;
+  max-height: calc(100vh - 7.5rem);
   display: flex;
   flex-direction: column;
   background: rgba(15, 26, 44, 0.82);
@@ -4187,34 +4403,57 @@ body.atelier-drawer-open {
   color: var(--text-light);
 }
 
-/* --- Input row --- */
+/* --- Input row ---
+   align-items: flex-end keeps the send button anchored to the bottom edge
+   as the textarea grows taller with a longer message, instead of drifting
+   to a vertically-centered position that looks off once the box isn't a
+   single line anymore. */
 .chat-input-row {
   display: flex;
+  align-items: flex-end;
   gap: 0.5rem;
   padding: 0.75rem 0.9rem;
   border-top: 1px solid rgba(197, 168, 128, 0.22);
   flex-shrink: 0;
 }
 
-.chat-input-row input {
+.chat-input-row textarea {
   flex: 1;
   min-width: 0;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.16);
   border-radius: 18px;
-  padding: 0.5rem 0.85rem;
+  padding: 0.55rem 0.9rem;
   color: var(--text-light);
   font-family: var(--font-body);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  line-height: 1.4;
   outline: none;
-  transition: var(--transition-luxury);
+  resize: none;
+  /* Mirrors the 140px cap in autoGrowTextarea() — grows with content up to
+     this height, then scrolls internally instead of pushing the panel
+     layout around. */
+  max-height: 140px;
+  overflow-y: auto;
+  transition: border-color 0.3s ease;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(197, 168, 128, 0.45) transparent;
 }
 
-.chat-input-row input:focus {
+.chat-input-row textarea::-webkit-scrollbar {
+  width: 5px;
+}
+
+.chat-input-row textarea::-webkit-scrollbar-thumb {
+  background-color: rgba(197, 168, 128, 0.45);
+  border-radius: 3px;
+}
+
+.chat-input-row textarea:focus {
   border-color: var(--color-accent);
 }
 
-.chat-input-row input::placeholder {
+.chat-input-row textarea::placeholder {
   color: rgba(255, 255, 255, 0.4);
 }
 
@@ -4365,7 +4604,7 @@ body.atelier-drawer-open {
     width: auto;
     max-width: none;
     bottom: 4.75rem;
-    height: min(460px, calc(100vh - 6.5rem));
+    height: min(620px, calc(100vh - 6rem));
   }
 
   .chat-admin-list,

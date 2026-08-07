@@ -24,9 +24,9 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script type="text/javascript">
         (function () {
-            // BUG 7 FIXED: publicKey must be your User/Public Key from EmailJS Account → API Keys
-            // NOT your Service ID (service_d1bqr4r belongs in emailjs.send() calls, not here)
-            emailjs.init({ publicKey: "YOUR_EMAILJS_PUBLIC_KEY" });
+            // publicKey is your User/Public Key from EmailJS Account → API Keys
+            // NOT your Service ID (service_v2tmcii belongs in emailjs.send() calls, not here)
+            emailjs.init({ publicKey: "uEAHBdsuVHFD9th9M" });
         })();
     </script>
 </head>
@@ -251,6 +251,13 @@
     </footer>
 
     <script type="module" src="app.js"></script>
+
+    <!-- Bespoke checkout modal portal mount point. order-engine.js populates
+         and unhides this once measurement validation passes, collecting
+         name/contact/address/delivery-date before the order is actually
+         written. Kept hidden at page load; display toggled entirely by JS. -->
+    <div id="bespoke-checkout-modal-portal" class="atelier-modal-portal" style="display: none;"></div>
+
 </body>
 
 </html>

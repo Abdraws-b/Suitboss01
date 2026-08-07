@@ -78,11 +78,19 @@
 
                 <div class="oauth-federation-matrix">
                     <button class="btn-oauth" id="oauth-google" aria-label="Authenticate using Google Credentials">
-                        <svg class="oauth-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="currentColor" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22c-.87-2.6-2.6-4.53-2.61-4.53z"/><path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/></svg>
+                        <svg class="oauth-icon" viewBox="0 0 24 24">
+                            <path fill="#4285F4" d="M23.52 12.273c0-.851-.076-1.669-.218-2.455H12v4.651h6.458c-.282 1.5-1.136 2.773-2.426 3.625v3.014h3.909c2.287-2.108 3.579-5.213 3.579-8.835z"/>
+                            <path fill="#34A853" d="M12 24c3.24 0 5.956-1.075 7.941-2.905l-3.909-3.014c-1.084.727-2.469 1.156-4.032 1.156-3.11 0-5.74-2.09-6.673-4.9H1.28v3.11C3.257 21.31 7.31 24 12 24z"/>
+                            <path fill="#FBBC05" d="M5.327 14.336A7.11 7.11 0 0 1 4.941 12c0-.81.14-1.594.386-2.336V6.554H1.28A11.94 11.94 0 0 0 0 12c0 1.936.463 3.766 1.28 5.446l4.047-3.11z"/>
+                            <path fill="#EA4335" d="M12 4.764c1.72 0 3.264.593 4.478 1.746l3.462-3.462C17.951 1.166 15.235 0 12 0 7.31 0 3.257 2.69 1.28 6.554l4.047 3.11C6.26 6.855 8.89 4.764 12 4.764z"/>
+                        </svg>
                         Continue with Google
                     </button>
                     <button class="btn-oauth" id="oauth-facebook" aria-label="Authenticate using Facebook Credentials">
-                        <svg class="oauth-icon" viewBox="0 0 24 24"><path fill="currentColor" d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                        <svg class="oauth-icon" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="12" fill="#1877F2"/>
+                            <path fill="#FFFFFF" d="M16.671 15.543l.532-3.47h-3.328v-2.25c0-.949.465-1.874 1.956-1.874h1.513V4.996s-1.374-.235-2.686-.235c-2.741 0-4.533 1.662-4.533 4.669v2.688H7.078v3.47h3.047v8.735a12.09 12.09 0 0 0 3.796.201v-8.936h2.75z"/>
+                        </svg>
                         Continue with Facebook
                     </button>
                 </div>
@@ -131,7 +139,7 @@
                             <span class="custom-checkbox"></span>
                             Remember configuration
                         </label>
-                        <a href="#recovery" class="auth-recovery-link">Forgot password?</a>
+                        <a href="#recovery" class="auth-recovery-link" id="auth-recovery-link">Forgot password?</a>
                     </div>
 
                     <button type="submit" class="btn-premium-pill auth-submit-action" id="auth-submit-btn">Authorize Entry</button>

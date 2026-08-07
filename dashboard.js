@@ -70,35 +70,49 @@ export async function mountAtelierDashboard(uid) {
   const mainContent = document.getElementById("main-content");
   if (!mainContent) return;
 
-  // Clean up any active dangling database streams to prevent memory compounding
-  if (window.activeDashboardUnsubscribe) {
-    window.activeDashboardUnsubscribe();
-    window.activeDashboardUnsubscribe = null;
-  }
-  if (window.activeInventoryUnsubscribe) {
-    window.activeInventoryUnsubscribe();
-    window.activeInventoryUnsubscribe = null;
-  }
-  if (window.activeMetricsUnsubscribe) {
-    window.activeMetricsUnsubscribe();
-    window.activeMetricsUnsubscribe = null;
-  }
-  if (window.activeRtwModalUnsubscribe) {
-    window.activeRtwModalUnsubscribe();
-    window.activeRtwModalUnsubscribe = null;
-  }
-  // The boutique orders modal itself, if it happened to be open when the
-  // dashboard remounted, shouldn't survive into the fresh render.
-  closeBoutiqueOrdersModal();
+  // This whole cleanup/setup block used to run unprotected, outside any
+  // try/catch — every step below it (the actual role-based rendering) had
+  // its own dedicated try/catch, but this one didn't. A failure here would
+  // skip straight past mountAtelierDashboard's own error handling and
+  // surface only as handleAppRouting's generic "Couldn't load the
+  // dashboard" toast, with no indication of what actually failed. Wrapping
+  // it here means any future issue in teardown/cleanup gets its own
+  // specific, logged, in-page message instead.
+  try {
+    // Clean up any active dangling database streams to prevent memory compounding
+    if (window.activeDashboardUnsubscribe) {
+      window.activeDashboardUnsubscribe();
+      window.activeDashboardUnsubscribe = null;
+    }
+    if (window.activeInventoryUnsubscribe) {
+      window.activeInventoryUnsubscribe();
+      window.activeInventoryUnsubscribe = null;
+    }
+    if (window.activeMetricsUnsubscribe) {
+      window.activeMetricsUnsubscribe();
+      window.activeMetricsUnsubscribe = null;
+    }
+    if (window.activeRtwModalUnsubscribe) {
+      window.activeRtwModalUnsubscribe();
+      window.activeRtwModalUnsubscribe = null;
+    }
+    // The boutique orders modal itself, if it happened to be open when the
+    // dashboard remounted, shouldn't survive into the fresh render.
+    closeBoutiqueOrdersModal();
 
-  // Same for the chat widget — its listeners (thread/list/badge) are all
-  // independent of the streams above and need their own explicit teardown.
-  teardownChatWidget();
+    // Same for the chat widget — its listeners (thread/list/badge) are all
+    // independent of the streams above and need their own explicit teardown.
+    teardownChatWidget();
 
-  // Fix header color when staging content over transparent areas
-  const headerEl = document.querySelector(".atelier-header");
-  if (headerEl) {
-    headerEl.classList.add("internal-header");
+    // Fix header color when staging content over transparent areas
+    const headerEl = document.querySelector(".atelier-header");
+    if (headerEl) {
+      headerEl.classList.add("internal-header");
+    }
+  } catch (setupError) {
+    console.error("Dashboard pre-mount cleanup failure:", setupError);
+    mainContent.innerHTML = `<p class="error-text" style="text-align:center; padding: 5rem;">Couldn't reset the previous view. Please refresh and try again.<br><small>${setupError.code || ''}: ${setupError.message || setupError}</small></p>`;
+    return;
   }
 
   mainContent.innerHTML = `<p class="loading-text" style="text-align:center; padding: 5rem;">Verifying secure studio access levels...</p>`;
@@ -116,14 +130,26 @@ export async function mountAtelierDashboard(uid) {
       ) {
         mountTailorShopTerminal();
       } else {
-        renderClientLedgerDashboard(uid);
+        // renderClientLedgerDashboard is an async function — awaiting it
+        // here (it wasn't before) means any error anywhere in its own
+        // execution is guaranteed to be caught by this try/catch, the same
+        // fix applied to handleAppRouting's call into this function.
+        await renderClientLedgerDashboard(uid);
       }
     } else {
       mainContent.innerHTML = `<p class="error-text" style="text-align:center; padding: 5rem;">Atelier profile record not found in system registers.</p>`;
     }
   } catch (error) {
     console.error("Dashboard router authentication intercept failure:", error);
-    mainContent.innerHTML = `<p class="error-text" style="text-align:center; padding: 5rem;">System validation error. Please try logging in again.</p>`;
+    // Every other error handler in this file shows error.code/error.message
+    // directly on screen (see the client orders stream, the metrics stream,
+    // the bespoke ledger, the RTW stream) — this was the one spot that
+    // didn't, which matters because this exact catch block is what runs if
+    // the very first read (the user's own profile doc, right above) gets
+    // rejected by Firestore for any reason, permission-denied included.
+    // Without the code/message on screen, that failure was indistinguishable
+    // from every other kind of error — now it isn't.
+    mainContent.innerHTML = `<p class="error-text" style="text-align:center; padding: 5rem;">System validation error. Please try logging in again.<br><small>${error.code || ''}: ${error.message || error}</small></p>`;
   }
 }
 
@@ -714,8 +740,8 @@ function mountTailorShopTerminal() {
            EXISTING: MASTER ORDER LEDGER QUEUE
            ═══════════════════════════════════════════════ -->
       <div class="admin-orders-section">
-        <h2 class="inventory-panel-title" style="margin-bottom: 0.5rem;">Commission Order Ledger</h2>
-        <p class="inventory-panel-sub" style="margin-bottom: 2rem;">All client bespoke submissions streaming live from the production database.</p>
+        <h2 class="ledger-section-title" style="margin-bottom: 0.5rem;">Commission Order Ledger</h2>
+        <p class="ledger-section-sub" style="margin-bottom: 2rem;">All client bespoke submissions streaming live from the production database.</p>
         <div id="admin-orders-stream" class="admin-stream-container">
           <p class="loading-text">Subscribing to master order ledgers...</p>
         </div>
@@ -1258,39 +1284,80 @@ function mountBespokeOrdersStream(adminStream) {
       const billingStatus = data.financialStatus || "Awaiting Invoice";
       const metrics = data.tailoringMetrics || {};
 
+      const clientFullName = data.clientName || "";
+      const clientEmail = data.clientEmail || "Anonymous Guest";
+      const contactPhone = data.contactPhone || "No contact record";
+      const shippingAddress = data.shippingAddress || "No shipping profile logged";
+      const deliveryDate = formatDeliveryDate(data.preferredDeliveryDate);
+
       adminHtmlBlock += `
         <div class="admin-order-card" data-order-id="${orderId}">
-          <div class="admin-order-row">
-            <div class="admin-meta-cell">
+
+          <!-- Header: commission identity, always the first thing read -->
+          <div class="rtw-card-header">
+            <div class="rtw-card-id-block">
               <span class="admin-id-tag">SB-${idShort}</span>
-              <p class="admin-client-email">${data.clientEmail || 'Anonymous Guest'}</p>
-            </div>
-            <div class="admin-details-cell">
-              <h4>${formatGarmentName(data.configuration?.silhouette)}</h4>
+              <h4 class="rtw-garment-name">${formatGarmentName(data.configuration?.silhouette)}</h4>
               <p class="textile-desc">Textile: ${formatTextileName(data.configuration?.textileProfile)}</p>
-              <button class="btn-inspect-metrics" data-target="drawer-${orderId}">Inspect Specs</button>
-            </div>
-            <div class="admin-pipeline-group-cell">
-              <div class="admin-pipeline-cell">
-                <label class="pipeline-label">Production Pipeline</label>
-                <select class="status-modifier-dropdown" data-id="${orderId}">
-                  <option value="Pending Studio Review" ${activeStatus === "Pending Studio Review" ? "selected" : ""}>Pending Review</option>
-                  <option value="In Cutting Stage" ${activeStatus === "In Cutting Stage" ? "selected" : ""}>In Cutting Stage</option>
-                  <option value="Assembled & Awaiting Fitting" ${activeStatus === "Assembled & Awaiting Fitting" ? "selected" : ""}>Awaiting Fitting</option>
-                  <option value="Completed & Shipped" ${activeStatus === "Completed & Shipped" ? "selected" : ""}>Completed & Dispatched</option>
-                </select>
-              </div>
-              <div class="admin-pipeline-cell">
-                <label class="pipeline-label">Financial Ledger Status</label>
-                <select class="billing-modifier-dropdown" data-id="${orderId}">
-                  <option value="Awaiting Invoice" ${billingStatus === "Awaiting Invoice" ? "selected" : ""}>Awaiting Invoice</option>
-                  <option value="Invoice Sent" ${billingStatus === "Invoice Sent" ? "selected" : ""}>Invoice Sent</option>
-                  <option value="Settled" ${billingStatus === "Settled" ? "selected" : ""}>Settled & Paid</option>
-                </select>
-              </div>
             </div>
           </div>
 
+          <div class="rtw-card-divider"></div>
+
+          <!-- Customer + delivery details — one fact per line, own icon -->
+          <div class="rtw-customer-info">
+            ${clientFullName ? `
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${personIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(clientFullName)}</span>
+            </div>
+            ` : ""}
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${mailIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(clientEmail)}</span>
+            </div>
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${phoneIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(contactPhone)}</span>
+            </div>
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${pinIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(shippingAddress)}</span>
+            </div>
+            ${deliveryDate ? `
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${calendarIconSvg()}</span>
+              <span class="rtw-info-text">Preferred delivery: ${deliveryDate}</span>
+            </div>
+            ` : ""}
+          </div>
+
+          <div class="rtw-card-divider"></div>
+
+          <!-- Pipeline controls — side by side -->
+          <div class="rtw-pipeline-controls">
+            <div class="admin-pipeline-cell">
+              <label class="pipeline-label">Production Pipeline</label>
+              <select class="status-modifier-dropdown" data-id="${orderId}">
+                <option value="Pending Studio Review" ${activeStatus === "Pending Studio Review" ? "selected" : ""}>Pending Review</option>
+                <option value="In Cutting Stage" ${activeStatus === "In Cutting Stage" ? "selected" : ""}>In Cutting Stage</option>
+                <option value="Assembled & Awaiting Fitting" ${activeStatus === "Assembled & Awaiting Fitting" ? "selected" : ""}>Awaiting Fitting</option>
+                <option value="Completed & Shipped" ${activeStatus === "Completed & Shipped" ? "selected" : ""}>Completed & Dispatched</option>
+              </select>
+            </div>
+            <div class="admin-pipeline-cell">
+              <label class="pipeline-label">Financial Ledger Status</label>
+              <select class="billing-modifier-dropdown" data-id="${orderId}">
+                <option value="Awaiting Invoice" ${billingStatus === "Awaiting Invoice" ? "selected" : ""}>Awaiting Invoice</option>
+                <option value="Invoice Sent" ${billingStatus === "Invoice Sent" ? "selected" : ""}>Invoice Sent</option>
+                <option value="Settled" ${billingStatus === "Settled" ? "selected" : ""}>Settled & Paid</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="rtw-card-divider"></div>
+
+          <button class="btn-inspect-metrics" data-target="drawer-${orderId}">Inspect Specs</button>
           <div id="drawer-${orderId}" class="admin-metrics-drawer" style="display: none;">
             <div class="drawer-inner-grid">
               <div class="metric-pill"><span>Neck:</span> <strong>${metrics.neck || '--'} cm</strong></div>
@@ -1390,9 +1457,17 @@ function mountReadyToWearOrdersStream(adminStream) {
       // High-precision luxury fallback parameters
       const collectionName = data.collectionName || "Boutique Selected Apparel";
       const selectedSize = data.selectedSize || "M";
+      const clientFullName = data.clientName || data.fullName || data.customerName || "";
       const clientEmail = data.clientEmail || "Anonymous Patron";
       const shippingAddress = data.shippingAddress || data.deliveryAddress || "No shipping profile logged";
-      const clientContact = data.contactNumber || data.phoneNumber || data.customerPhone || "No contact record";
+      // THE FIX: openRTWCheckoutModal (app.js) writes this field as
+      // `contactPhone` — this fallback chain was checking contactNumber /
+      // phoneNumber / customerPhone first, none of which are ever actually
+      // written by the checkout form, so every real order fell straight
+      // through to "No contact record" even when the customer had entered
+      // their number correctly. contactPhone now checked first; the other
+      // names stay as fallbacks for any differently-sourced legacy data.
+      const clientContact = data.contactPhone || data.contactNumber || data.phoneNumber || data.customerPhone || "No contact record";
       const apparelImage = data.apparelImage || data.imageUrl || "images/placeholder-garment.jpg";
       const deliveryNotes = typeof data.deliveryNotes === "string" ? data.deliveryNotes : "";
 
@@ -1400,79 +1475,85 @@ function mountReadyToWearOrdersStream(adminStream) {
       const existingNotes = deliveryNotes;
 
       const thumbnailHtml = apparelImage
-        ? `<img src="${apparelImage}" alt="${collectionName}" loading="lazy"
-             style="width:60px;height:60px;object-fit:cover;border:1px solid var(--color-accent);padding:2px;background:#111;border-radius:2px;flex-shrink:0;">`
-        : `<div style="width:60px;height:60px;border:1px solid var(--color-accent);background:#111;border-radius:2px;flex-shrink:0;"></div>`;
+        ? `<img src="${apparelImage}" alt="${collectionName}" loading="lazy" class="rtw-card-thumb">`
+        : `<div class="rtw-card-thumb rtw-card-thumb--empty"></div>`;
 
       rtwHtmlBlock += `
         <div class="admin-order-card rtw-order-card" data-order-id="${orderId}">
-          <div class="admin-order-row">
-            <div class="admin-meta-cell" style="display:flex; gap:0.75rem; align-items:flex-start;">
-              ${thumbnailHtml}
-              <div>
-                <span class="admin-id-tag">SB-${idShort}</span>
-                <p class="admin-client-email">${escapeHtmlForDisplay(clientEmail)}</p>
-                <p class="rtw-contact-line" style="margin:0.15rem 0 0 0; font-size:0.85rem; opacity:0.85;">
-                  📞 ${escapeHtmlForDisplay(contactNumber)}
-                </p>
-                <p class="rtw-address-line" style="margin:0.1rem 0 0 0; font-size:0.8rem; opacity:0.7; max-width:220px;">
-                  📦 ${escapeHtmlForDisplay(shippingAddress)}
-                </p>
-              </div>
+
+          <!-- Header: garment identity + thumbnail, always the first thing read -->
+          <div class="rtw-card-header">
+            <div class="rtw-card-id-block">
+              <span class="admin-id-tag">SB-${idShort}</span>
+              <h4 class="rtw-garment-name">${escapeHtmlForDisplay(collectionName)}</h4>
+              <p class="textile-desc">Size ${escapeHtmlForDisplay(selectedSize)}</p>
             </div>
+            ${thumbnailHtml}
+          </div>
 
-            <div class="admin-details-cell">
-              <h4>${escapeHtmlForDisplay(collectionName)}</h4>
-              <p class="textile-desc">Size: ${escapeHtmlForDisplay(selectedSize)}</p>
+          <div class="rtw-card-divider"></div>
+
+          <!-- Customer contact — one fact per line, own icon, consistent legible color -->
+          <div class="rtw-customer-info">
+            ${clientFullName ? `
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${personIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(clientFullName)}</span>
             </div>
+            ` : ""}
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${mailIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(clientEmail)}</span>
+            </div>
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${phoneIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(contactNumber)}</span>
+            </div>
+            <div class="rtw-info-row">
+              <span class="rtw-info-icon" aria-hidden="true">${pinIconSvg()}</span>
+              <span class="rtw-info-text">${escapeHtmlForDisplay(shippingAddress)}</span>
+            </div>
+          </div>
 
-            <div class="admin-pipeline-group-cell">
-              <div class="admin-pipeline-cell">
-                <label class="pipeline-label">Production Pipeline</label>
-                <select class="status-modifier-dropdown" data-id="${orderId}">
-                  <option value="Pending Studio Review" ${activeStatus === "Pending Studio Review" ? "selected" : ""}>Pending Review</option>
-                  <option value="In Cutting Stage" ${activeStatus === "In Cutting Stage" ? "selected" : ""}>Preparing Order</option>
-                  <option value="Assembled & Awaiting Fitting" ${activeStatus === "Assembled & Awaiting Fitting" ? "selected" : ""}>Packed</option>
-                  <option value="Completed & Shipped" ${activeStatus === "Completed & Shipped" ? "selected" : ""}>Dispatched</option>
-                </select>
-              </div>
-              <div class="admin-pipeline-cell">
-                <label class="pipeline-label">Financial Ledger Status</label>
-                <select class="billing-modifier-dropdown" data-id="${orderId}">
-                  <option value="Awaiting Invoice" ${billingStatus === "Awaiting Invoice" ? "selected" : ""}>Awaiting Invoice</option>
-                  <option value="Invoice Sent" ${billingStatus === "Invoice Sent" ? "selected" : ""}>Invoice Sent</option>
-                  <option value="Settled" ${billingStatus === "Settled" ? "selected" : ""}>Settled & Paid</option>
-                </select>
-              </div>
+          <div class="rtw-card-divider"></div>
 
-              <!-- TASK 2: Delivery Dispatch Input Matrix -->
-              <div class="admin-pipeline-cell rtw-dispatch-cell" style="display:flex; gap:0.5rem; align-items:center; margin-top:0.5rem;">
-                <input
-                  type="text"
-                  class="rtw-delivery-dispatcher"
-                  data-id="${orderId}"
-                  placeholder="e.g., Dispatched via courier. Arrival Friday morning."
-                  value="${escapeHtmlForAttribute(existingNotes)}"
-                  style="flex:1; min-width:180px; padding:0.45rem 0.6rem; border:1px solid var(--color-border-slate); border-radius:2px; font-family: var(--font-body); font-size:0.85rem;"
-                >
-                <button
-                  type="button"
-                  class="btn-send-delivery-note"
-                  data-id="${orderId}"
-                  style="
-                    background: var(--color-accent);
-                    color: var(--color-primary);
-                    border: none;
-                    border-radius: 2px;
-                    padding: 0.45rem 0.9rem;
-                    font-size: 0.8rem;
-                    font-weight: 600;
-                    letter-spacing: 0.04em;
-                    cursor: pointer;
-                    flex-shrink: 0;
-                  "
-                >Send</button>
-              </div>
+          <!-- Pipeline controls — side by side, own labels, no longer squeezed against the contact block -->
+          <div class="rtw-pipeline-controls">
+            <div class="admin-pipeline-cell">
+              <label class="pipeline-label">Production Pipeline</label>
+              <select class="status-modifier-dropdown" data-id="${orderId}">
+                <option value="Pending Studio Review" ${activeStatus === "Pending Studio Review" ? "selected" : ""}>Pending Review</option>
+                <option value="In Cutting Stage" ${activeStatus === "In Cutting Stage" ? "selected" : ""}>Preparing Order</option>
+                <option value="Assembled & Awaiting Fitting" ${activeStatus === "Assembled & Awaiting Fitting" ? "selected" : ""}>Packed</option>
+                <option value="Completed & Shipped" ${activeStatus === "Completed & Shipped" ? "selected" : ""}>Dispatched</option>
+              </select>
+            </div>
+            <div class="admin-pipeline-cell">
+              <label class="pipeline-label">Financial Ledger Status</label>
+              <select class="billing-modifier-dropdown" data-id="${orderId}">
+                <option value="Awaiting Invoice" ${billingStatus === "Awaiting Invoice" ? "selected" : ""}>Awaiting Invoice</option>
+                <option value="Invoice Sent" ${billingStatus === "Invoice Sent" ? "selected" : ""}>Invoice Sent</option>
+                <option value="Settled" ${billingStatus === "Settled" ? "selected" : ""}>Settled & Paid</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="rtw-card-divider"></div>
+
+          <!-- Delivery update — a real textarea now, not a single-line input that
+               hid everything past its visible width. Grows with content up to a
+               cap, then scrolls internally, same pattern as the chat composer. -->
+          <div class="rtw-dispatch-section">
+            <label class="pipeline-label" for="dispatch-${orderId}">Delivery Update to Client</label>
+            <div class="rtw-dispatch-cell">
+              <textarea
+                id="dispatch-${orderId}"
+                class="rtw-delivery-dispatcher"
+                data-id="${orderId}"
+                rows="1"
+                placeholder="e.g., Dispatched via courier. Arrival Friday morning."
+              >${escapeHtmlForDisplay(existingNotes)}</textarea>
+              <button type="button" class="btn-send-delivery-note" data-id="${orderId}">Send</button>
             </div>
           </div>
         </div>
@@ -1480,6 +1561,13 @@ function mountReadyToWearOrdersStream(adminStream) {
     });
 
     adminStream.innerHTML = rtwHtmlBlock;
+
+    // Delivery update textareas: autosize as the admin types, same 140px cap
+    // and internal-scroll behavior as the chat widget's composer.
+    adminStream.querySelectorAll(".rtw-delivery-dispatcher").forEach((textarea) => {
+      autoGrowDispatchTextarea(textarea);
+      textarea.addEventListener("input", () => autoGrowDispatchTextarea(textarea));
+    });
 
     // Pipeline status dropdowns (shared logic with bespoke view)
     adminStream.querySelectorAll(".status-modifier-dropdown").forEach(dropdown => {
@@ -1562,11 +1650,58 @@ function escapeHtmlForDisplay(rawText) {
 }
 
 /**
- * Escapes text for safe injection into an HTML attribute (e.g. an
- * input's value="..." attribute), additionally escaping quote characters.
+ * Autosizes a delivery-update textarea as the admin types — grows with
+ * content up to a cap, then scrolls internally rather than either hiding
+ * text (the old single-line input's problem) or growing the card forever.
  */
-function escapeHtmlForAttribute(rawText) {
-  return escapeHtmlForDisplay(rawText).replace(/"/g, "&quot;");
+function autoGrowDispatchTextarea(textarea) {
+  if (!textarea) return;
+  textarea.style.height = "auto";
+  textarea.style.height = Math.min(textarea.scrollHeight, 120) + "px";
+}
+
+function mailIconSvg() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"></path><path d="M22 6c0-1.1-.9-2-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6Z"></path><path d="m22 6-10 7L2 6"></path></svg>`;
+}
+
+function phoneIconSvg() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z"></path></svg>`;
+}
+
+function pinIconSvg() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>`;
+}
+
+function personIconSvg() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+}
+
+function calendarIconSvg() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>`;
+}
+
+/**
+ * Formats the raw "YYYY-MM-DD" value from the checkout modal's date input
+ * into a readable label (e.g. "Aug 15, 2026"). Returns an empty string for
+ * anything missing or unparseable so the calling template's conditional
+ * cleanly omits the row instead of showing "Invalid Date" or similar.
+ */
+function formatDeliveryDate(rawDate) {
+  if (!rawDate || typeof rawDate !== "string") return "";
+  // Parsed as local time, not UTC — a bare "YYYY-MM-DD" string passed to
+  // `new Date()` directly is interpreted as UTC midnight, which can quietly
+  // roll the displayed date back a day for anyone west of UTC. Splitting
+  // and constructing with explicit local-time arguments avoids that.
+  const parts = rawDate.split("-").map(Number);
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return "";
+  const [year, month, day] = parts;
+  const parsedDate = new Date(year, month - 1, day);
+  if (Number.isNaN(parsedDate.getTime())) return "";
+  return parsedDate.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function formatGarmentName(slug) {

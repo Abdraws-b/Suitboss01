@@ -17,9 +17,10 @@ import {
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import { initAuthEngine } from "./auth.js";
-import { initOrderCommissionEngine } from "./order-engine.js";
-import { mountAtelierDashboard } from "./dashboard.js";
 import { showAtelierNotification } from "./ui-feedback.js";
+// order-engine.js and dashboard.js are intentionally NOT statically imported
+// here — see the AUTH-html-breaks-if-order-engine-breaks incident this
+// fixes, explained just below the DOMContentLoaded orchestration.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // FIREBASE CONFIGURATION MATRIX
@@ -39,6 +40,34 @@ const analytics = getAnalytics(app);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH-READY GATE
+//
+// auth.currentUser is null until Firebase has asynchronously rehydrated the
+// persisted session — that resolution happens on its own schedule, fired via
+// onAuthStateChanged below, and is NOT guaranteed to have happened yet just
+// because DOMContentLoaded fired. Several places in this codebase were
+// reading auth.currentUser synchronously the instant a form was submitted
+// or a button was clicked, with no coordination with that async resolution.
+//
+// The most exposed case: auth.js redirects a brand-new user straight to
+// custom-order.html via a hard page navigation immediately after signup.
+// On that fresh load, Firebase hasn't rehydrated yet. If the person (or a
+// slow connection) was even slightly quick to submit, the synchronous check
+// would see currentUser === null for someone who WAS actually signed in,
+// throw "Session validation failed," and never create the order or redirect
+// to the success page — exactly the loophole this fixes.
+//
+// authReady resolves exactly once, the first time onAuthStateChanged fires
+// (whether that resolves to a user or null), and stays resolved after that —
+// so awaiting it costs nothing once the app has been open for more than an
+// instant, and closes the race entirely during that first-load window.
+// ─────────────────────────────────────────────────────────────────────────────
+let resolveAuthReady;
+export const authReady = new Promise((resolve) => {
+  resolveAuthReady = resolve;
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GLOBAL UNSUBSCRIBE HANDLES
@@ -194,15 +223,52 @@ function syncNavActiveState() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SPA ROUTER
+//
+// mountAtelierDashboard is loaded dynamically, right here, instead of via a
+// static top-of-file import. This is the actual fix for a real incident:
+// app.js used to statically import both order-engine.js and dashboard.js
+// unconditionally, on every page. Static ES module imports link the entire
+// dependency graph before ANY code runs — so if either of those modules
+// ever failed to load (a missing export after an out-of-sync deploy, a
+// typo, anything), the failure took down app.js's own script entirely,
+// including on pages like auth.html that never needed either module in the
+// first place. That's exactly what silently broke sign-in and the password
+// toggle together: neither was actually broken, app.js just never finished
+// loading. Dynamic import() turns a module-load failure into an ordinary
+// runtime promise rejection, which try/catch can actually contain.
 // ─────────────────────────────────────────────────────────────────────────────
-function handleAppRouting(user) {
+async function handleAppRouting(user) {
   const currentHash = window.location.hash;
 
   syncNavActiveState();
 
   if (currentHash === "#dashboard" || currentHash === "#account") {
     if (user) {
-      mountAtelierDashboard(user.uid);
+      try {
+        const { mountAtelierDashboard } = await import("./dashboard.js");
+        // THE FIX: mountAtelierDashboard is an async function that does real
+        // work after its own first await (fetching the user's profile doc to
+        // decide admin vs. client view, then mounting one or the other). This
+        // call was missing its await, so this try/catch only ever protected
+        // the import() — any error inside mountAtelierDashboard itself became
+        // an unhandled promise rejection that never reached the catch block
+        // below. No toast, nothing in the UI — the dashboard just silently
+        // failed to appear. Awaiting it here means any failure anywhere in
+        // that chain is now actually caught and shown to the person.
+        await mountAtelierDashboard(user.uid);
+      } catch (err) {
+        // With mountAtelierDashboard's own internal try/catch blocks now
+        // covering every failure path without re-throwing, this outer catch
+        // can realistically only fire from the dynamic import() itself
+        // failing — a module-load problem (syntax error, 404, network),
+        // not a Firestore data/permissions issue. Those now surface their
+        // own specific on-screen message from inside dashboard.js instead.
+        console.error("Dashboard module failed to load:", err);
+        showAtelierNotification(
+          `Couldn't load the dashboard. Please refresh. (${err.message || err})`,
+          "error"
+        );
+      }
     } else {
       window.location.href = "auth.html";
     }
@@ -364,6 +430,17 @@ function openRTWCheckoutModal(docId, collectionName, selectedSize, finalPrice, a
 
         <div class="rtw-modal-form">
           <div class="rtw-field">
+            <label for="rtw-fullname" class="rtw-label">Full Name</label>
+            <input
+              type="text"
+              id="rtw-fullname"
+              class="rtw-input"
+              placeholder="e.g. Bernard Aboagye"
+              required
+            >
+          </div>
+
+          <div class="rtw-field">
             <label for="rtw-address" class="rtw-label">Full Shipping Address</label>
             <textarea
               id="rtw-address"
@@ -409,15 +486,24 @@ function openRTWCheckoutModal(docId, collectionName, selectedSize, finalPrice, a
 
   // ── FORM SUBMIT HANDLER ──────────────────────────────────────────────────────
   document.getElementById("rtw-modal-submit").addEventListener("click", async () => {
+    // Same auth-rehydration race as the Acquire Piece gate above — wait for
+    // Firebase's initial session check before trusting auth.currentUser.
+    await authReady;
+
     const user = auth.currentUser;
     if (!user) {
       showAtelierNotification("You must be signed in to place an order.", "error");
       return;
     }
 
-    const shippingAddress = document.getElementById("rtw-address").value.trim();
-    const contactPhone    = document.getElementById("rtw-phone").value.trim();
+    const fullName         = document.getElementById("rtw-fullname").value.trim();
+    const shippingAddress  = document.getElementById("rtw-address").value.trim();
+    const contactPhone     = document.getElementById("rtw-phone").value.trim();
 
+    if (!fullName) {
+      showAtelierNotification("Please enter your full name.", "error");
+      return;
+    }
     if (!shippingAddress) {
       showAtelierNotification("Please enter your full shipping address.", "error");
       return;
@@ -435,6 +521,7 @@ function openRTWCheckoutModal(docId, collectionName, selectedSize, finalPrice, a
       const orderPayload = {
         clientId:              user.uid,
         clientEmail:           user.email,
+        clientName:            fullName,
         orderType:             "Ready-To-Wear",
         collectionItemId:      docId,
         collectionName:        collectionName,
@@ -694,9 +781,16 @@ function mountLookbookStream() {
     });
 
     // ── TASK 3B: Acquire Piece delegated click listener ───────────────────────
-    atelierGrid.addEventListener("click", (e) => {
+    atelierGrid.addEventListener("click", async (e) => {
       const acquireBtn = e.target.closest(".btn-acquire-piece");
       if (!acquireBtn) return;
+
+      // Wait for Firebase's initial session check to actually land before
+      // trusting auth.currentUser — this listener is wired up during the
+      // very first lookbook render, often before onAuthStateChanged has
+      // fired even once, so reading it synchronously here was the single
+      // most exposed instance of the false "please sign in" loophole.
+      await authReady;
 
       if (!auth.currentUser) {
         showAtelierNotification("Please sign in to acquire a piece.", "error");
@@ -733,33 +827,58 @@ function mountLookbookStream() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ORCHESTRATION: DOMContentLoaded
+//
+// Every step below is isolated in its own try/catch. Before this, all of
+// this lived in one flat function body — a single uncaught error anywhere
+// in step N silently prevented every step after it from ever running. That
+// combined with the static-import incident described above (see
+// handleAppRouting) is exactly how two completely unrelated features
+// (sign-in, the password toggle) broke together from one root cause.
 // ─────────────────────────────────────────────────────────────────────────────
+function runInitStep(label, fn) {
+  try {
+    fn();
+  } catch (err) {
+    console.error(`Init step failed [${label}]:`, err);
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
 
   // 1. Initialize Authorization Forms if present
-  initAuthEngine();
+  runInitStep("auth engine", () => initAuthEngine());
 
-  // 2. Initialize Order Commission Form if present
+  // 2. Initialize Order Commission Form if present — loaded dynamically for
+  //    the same reason mountAtelierDashboard is above: a problem in
+  //    order-engine.js should never be able to take down auth.js's own
+  //    initialization on pages (like auth.html) that don't even have this form.
   if (document.getElementById("bespoke-proportion-form")) {
-    initOrderCommissionEngine();
+    import("./order-engine.js")
+      .then(({ initOrderCommissionEngine }) => initOrderCommissionEngine())
+      .catch((err) => {
+        console.error("Order engine module failed to load:", err);
+        showAtelierNotification("Couldn't load the commission form. Please refresh.", "error");
+      });
   }
 
   // 3. Sync nav active state immediately on page load.
   //    The custom-order.html validation layer fires here on cold load.
-  syncNavActiveState();
+  runInitStep("nav active state sync", () => syncNavActiveState());
 
   // 3b. Wire up the mobile hamburger + glass drawer (no-ops if absent)
-  initMobileDrawer();
+  runInitStep("mobile drawer", () => initMobileDrawer());
 
   // 4. Hash change router — re-run full active state sync on every navigation event
-  window.addEventListener("hashchange", () => {
-    syncNavActiveState();
-    handleAppRouting(auth.currentUser);
+  runInitStep("hashchange listener registration", () => {
+    window.addEventListener("hashchange", () => {
+      runInitStep("nav active state sync (hashchange)", () => syncNavActiveState());
+      runInitStep("app routing (hashchange)", () => handleAppRouting(auth.currentUser));
+    });
   });
 
   // 5. Fire the lookbook stream immediately if the grid mount point is present
   if (document.querySelector(".atelier-grid")) {
-    mountLookbookStream();
+    runInitStep("lookbook stream", () => mountLookbookStream());
   }
 
   // 6. AUTH STATE OBSERVER — master orchestrator
@@ -772,7 +891,21 @@ document.addEventListener("DOMContentLoaded", () => {
   //    In cases (a) and (b), triggerWelcomeVoice() is called. The sessionStorage
   //    guard inside that function ensures the utterance only executes once per
   //    login session, regardless of how many times this observer fires.
-  onAuthStateChanged(auth, (user) => {
+  //
+  //    This registration is now wrapped like every other step above — it's the
+  //    single most consequential one in the whole file, since dashboard
+  //    mounting, nav auth-state toggling, and the welcome voice all depend on
+  //    it firing at all. Before this, it sat completely unprotected: if
+  //    anything earlier in this same DOMContentLoaded callback threw, this
+  //    line would simply never run, and login would work perfectly at the
+  //    Firebase level while nothing in the UI ever found out about it.
+  runInitStep("auth state observer registration", () => {
+    onAuthStateChanged(auth, (user) => {
+    // Signals every awaiting authReady caller that Firebase has now
+    // determined the real session state at least once. A no-op on every
+    // subsequent call (a resolved promise can't un-resolve or re-resolve).
+    resolveAuthReady();
+
     // Class-based, not ID-based: index.html and custom-order.html now render
     // TWO copies of each control (desktop .nav-links + the mobile drawer's
     // .drawer-nav-links). getElementById would only ever reach the first
@@ -847,6 +980,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       syncNavActiveState();
     }
+  });
   });
 
   // 7. LOGOUT HANDLER — bind to every instance (desktop nav + mobile drawer)

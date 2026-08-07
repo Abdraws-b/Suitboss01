@@ -3,7 +3,8 @@ import {
     signInWithEmailAndPassword,
     GoogleAuthProvider,
     signInWithPopup,
-    getAdditionalUserInfo
+    getAdditionalUserInfo,
+    sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-auth.js";
 
 import { 
@@ -71,6 +72,121 @@ export function initAuthEngine() {
                 passwordInput.focus();
                 if (selectionStart !== null && selectionEnd !== null) {
                     passwordInput.setSelectionRange(selectionStart, selectionEnd);
+                }
+            }
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // FORGOT PASSWORD
+    // The link used to just jump to a dead #recovery hash — no actual
+    // functionality behind it. Wires real Firebase password-reset email
+    // delivery instead.
+    //
+    // Two layers of protection here, not one:
+    //   1. Message uniformity — success and auth/user-not-found show the
+    //      exact same text ("if an account exists..."), so the response
+    //      itself never confirms whether a given email is registered.
+    //   2. A 30s client-side cooldown after every dispatch, win or lose.
+    //      Uniform messaging alone doesn't stop someone from firing this
+    //      request rapidly and repeatedly — which is its own problem even
+    //      with identical text: it can be used to email-bomb a real
+    //      person's inbox with reset links, and tight repeated requests
+    //      are exactly the pattern that can expose response-timing side
+    //      channels a static message can't hide. The cooldown makes rapid
+    //      probing structurally slow rather than trusting wording alone.
+    // Genuinely actionable errors (malformed email, network failure) still
+    // get their own honest, specific message — those aren't an
+    // account-existence leak.
+    // -----------------------------------------------------------------------
+    const recoveryLink = document.getElementById("auth-recovery-link");
+    const RECOVERY_COOLDOWN_SECONDS = 30;
+    let recoveryCooldownActive = false;
+
+    function startRecoveryCooldown() {
+        recoveryCooldownActive = true;
+        recoveryLink.style.pointerEvents = "none";
+        recoveryLink.style.opacity = "0.65";
+
+        let secondsLeft = RECOVERY_COOLDOWN_SECONDS;
+        recoveryLink.textContent = `Try again in ${secondsLeft}s`;
+
+        const countdownTimer = setInterval(() => {
+            secondsLeft -= 1;
+            if (secondsLeft <= 0) {
+                clearInterval(countdownTimer);
+                recoveryLink.textContent = "Forgot password?";
+                recoveryLink.style.pointerEvents = "";
+                recoveryLink.style.opacity = "";
+                recoveryCooldownActive = false;
+                return;
+            }
+            recoveryLink.textContent = `Try again in ${secondsLeft}s`;
+        }, 1000);
+    }
+
+    if (recoveryLink && !recoveryLink.dataset.listenerAttached) {
+        recoveryLink.dataset.listenerAttached = "true";
+
+        recoveryLink.addEventListener("click", async (e) => {
+            e.preventDefault();
+
+            if (recoveryCooldownActive) return;
+
+            const emailInput = document.getElementById("auth-email");
+            const email = emailInput ? emailInput.value.trim() : "";
+
+            if (!email) {
+                const emailErrorNode = emailInput?.parentElement?.querySelector(".error-indicator");
+                if (emailErrorNode) {
+                    emailErrorNode.textContent = "Enter your email above first, then tap Forgot password?";
+                    emailErrorNode.style.color = "#ff4d4d";
+                }
+                emailInput?.focus();
+                return;
+            }
+
+            recoveryLink.textContent = "Sending...";
+            recoveryLink.style.pointerEvents = "none";
+            recoveryLink.style.opacity = "0.65";
+
+            try {
+                await sendPasswordResetEmail(auth, email);
+                showAtelierNotification(
+                    `If an account exists for ${email}, a password reset link has been sent. Check your inbox.`,
+                    "success"
+                );
+                startRecoveryCooldown();
+            } catch (error) {
+                console.error("Password reset dispatch failure:", error);
+
+                if (error.code === "auth/invalid-email") {
+                    const emailErrorNode = emailInput?.parentElement?.querySelector(".error-indicator");
+                    if (emailErrorNode) {
+                        emailErrorNode.textContent = "That doesn't look like a valid email address.";
+                        emailErrorNode.style.color = "#ff4d4d";
+                    }
+                    // Not a real dispatch attempt — no cooldown, they should
+                    // be able to immediately retry with a corrected address.
+                    recoveryLink.textContent = "Forgot password?";
+                    recoveryLink.style.pointerEvents = "";
+                    recoveryLink.style.opacity = "";
+                } else if (error.code === "auth/user-not-found") {
+                    // Same reassuring message and same cooldown as success —
+                    // no observable difference of any kind between the two.
+                    showAtelierNotification(
+                        `If an account exists for ${email}, a password reset link has been sent. Check your inbox.`,
+                        "success"
+                    );
+                    startRecoveryCooldown();
+                } else if (error.code === "auth/too-many-requests") {
+                    showAtelierNotification("Too many attempts. Please wait a while before trying again.", "error");
+                    startRecoveryCooldown();
+                } else {
+                    showAtelierNotification("Couldn't send the reset link right now. Please try again.", "error");
+                    recoveryLink.textContent = "Forgot password?";
+                    recoveryLink.style.pointerEvents = "";
+                    recoveryLink.style.opacity = "";
                 }
             }
         });
