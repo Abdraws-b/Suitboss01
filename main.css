@@ -1245,6 +1245,359 @@
   border: 1px dashed var(--color-border-slate);
 }
 
+/* ============================================================================
+   COLLAPSIBLE DASHBOARD SIDEBAR SYSTEM
+   Shared shell for both the client and admin dashboards. Sidebar sits in
+   normal document flow below the site header (which is position: relative
+   here, not fixed — see HEADER STATE SYSTEM), so a simple sticky offset is
+   enough to keep it in view while the content pane scrolls, with no fragile
+   header-height math involved.
+
+   Deliberately flat throughout: solid borders and background-color
+   transitions only. No box-shadow glow on any interactive element — hover
+   and active states are communicated with color and a left accent bar,
+   the same way .btn-premium-pill and every other button in this project
+   already does it.
+   ============================================================================ */
+
+.dash-shell {
+  display: flex;
+  /* align-items: stretch (the flex default) is what makes the sidebar match
+     the content pane's height. This was previously flex-start, which sized
+     the sidebar to its own nav items only — leaving empty space beside any
+     content pane taller than the nav list. Sidebar height is intentionally
+     never set explicitly (no 100vh / fixed px): it simply grows to match
+     whatever height .dash-content-pane naturally reaches, so it scales with
+     real content on every dashboard route. */
+  align-items: stretch;
+  gap: 0;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 2rem 2rem 4rem;
+  min-height: 60vh;
+}
+
+/* --- Sidebar --- */
+.dash-sidebar {
+  position: sticky;
+  top: 1.5rem;
+  flex-shrink: 0;
+  width: 240px;
+  background-color: var(--color-primary);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.dash-sidebar-collapse-btn {
+  align-self: flex-end;
+  width: 32px;
+  height: 32px;
+  margin: 0.75rem 0.75rem 0.25rem;
+  flex-shrink: 0;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.dash-sidebar-collapse-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.dash-sidebar-collapse-btn svg {
+  transition: transform 0.3s ease;
+}
+
+.dash-shell.is-collapsed .dash-sidebar-collapse-btn svg {
+  transform: rotate(180deg);
+}
+
+.dash-sidebar-nav {
+  flex: 1;
+  padding: 0.5rem 0;
+}
+
+.dash-sidebar-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.dash-sidebar-footer {
+  padding: 0.5rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* app.js's site-wide auth observer sets style.display="inline-block"
+   directly on every .js-logout-btn (nav bar, mobile drawer, and now this
+   sidebar item all share that class). Inline styles beat class rules, so
+   without this override the sidebar's own flex layout for icon+label
+   alignment would silently lose to that inline style once signed in. */
+.dash-nav-signout {
+  display: flex !important;
+}
+
+/* --- Nav items (shared by both regular sections and the sign-out link) --- */
+.dash-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  background-color: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+  white-space: nowrap;
+}
+
+.dash-nav-item:hover {
+  background-color: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
+.dash-nav-item.is-active {
+  background-color: rgba(197, 168, 128, 0.1);
+  border-left-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.dash-nav-icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dash-nav-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: opacity 0.2s ease;
+}
+
+.dash-nav-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 0.4rem;
+  border-radius: 10px;
+  background-color: var(--color-accent);
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* --- Collapsed state: icon rail only --- */
+.dash-shell.is-collapsed .dash-sidebar {
+  width: 68px;
+}
+
+.dash-shell.is-collapsed .dash-nav-label,
+.dash-shell.is-collapsed .dash-nav-badge {
+  display: none;
+}
+
+.dash-shell.is-collapsed .dash-nav-item {
+  justify-content: center;
+  padding: 0.85rem;
+}
+
+.dash-shell.is-collapsed .dash-sidebar-collapse-btn {
+  align-self: center;
+}
+
+/* --- Content pane --- */
+.dash-content-pane {
+  flex: 1;
+  min-width: 0;
+  padding: 0 0 0 2.5rem;
+}
+
+.dash-section-header {
+  margin-bottom: 2rem;
+}
+
+.dash-section-eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-accent);
+  margin: 0 0 0.4rem 0;
+}
+
+.dash-section-title {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  margin: 0 0 0.4rem 0;
+  line-height: 1.15;
+}
+
+.dash-section-sub {
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  color: #5a6672;
+  margin: 0;
+  max-width: 60ch;
+}
+
+.dash-section-body {
+  margin-top: 0;
+}
+
+/* --- Overview quick stats --- */
+.dash-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.dash-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  background-color: #ffffff;
+  border: 1px solid var(--color-border-slate);
+  padding: 1.25rem 1.5rem;
+}
+
+.dash-stat-value {
+  font-family: var(--font-heading);
+  font-size: 2rem;
+  font-weight: 500;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.dash-stat-label {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7f8c8d;
+}
+
+.btn-dash-view-all {
+  display: inline-block;
+  margin-top: 1.25rem;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.btn-dash-view-all:hover {
+  color: var(--color-accent);
+}
+
+/* --- Notifications feed --- */
+.dash-notification-row {
+  display: flex;
+  gap: 0.85rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--color-border-slate);
+}
+
+.dash-notification-row:last-child {
+  border-bottom: none;
+}
+
+.dash-notification-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(197, 168, 128, 0.12);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dash-notification-text {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  color: var(--color-primary);
+  line-height: 1.5;
+}
+
+.dash-notification-meta {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  color: #9a9a9a;
+  margin-top: 0.2rem;
+}
+
+/* --- Mobile: sidebar collapses to icon rail automatically; no separate
+       drawer needed since the icon rail alone is already narrow enough to
+       stay usable next to the content pane on a phone-width screen. --- */
+@media screen and (max-width: 900px) {
+  .dash-shell {
+    padding: 1rem 1rem 3rem;
+  }
+
+  .dash-sidebar {
+    width: 68px !important;
+  }
+
+  .dash-nav-label,
+  .dash-nav-badge {
+    display: none;
+  }
+
+  .dash-nav-item {
+    justify-content: center;
+    padding: 0.85rem;
+  }
+
+  .dash-sidebar-collapse-btn {
+    display: none;
+  }
+
+  .dash-content-pane {
+    padding-left: 1.25rem;
+  }
+
+  .dash-stat-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-section-title {
+    font-size: 1.5rem;
+  }
+}
+
 /* --- Tailor Shop Admin Workspace --- */
 .admin-wrapper {
   max-width: 1200px;
@@ -2401,6 +2754,129 @@
   cursor: pointer;
 }
 
+/* ── GARMENT IMAGE PICKER ──────────────────────────────────────────────
+   Two mutually-exclusive source modes (upload from computer / paste a
+   URL) sharing one live preview beneath them, so the admin can actually
+   see what they're about to publish to the Lookbook rather than trusting
+   a pasted link blind. */
+.inv-image-source-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.inv-image-source-btn {
+  flex: 1;
+  background-color: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9a9a9a;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+  transition: var(--transition-luxury);
+}
+
+.inv-image-source-btn:hover {
+  border-color: rgba(197, 168, 128, 0.35);
+  color: #d8d8d8;
+}
+
+.inv-image-source-btn.is-active {
+  background-color: rgba(197, 168, 128, 0.12);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.inv-image-source-panel {
+  margin-bottom: 0.75rem;
+}
+
+/* --- Upload drop zone --- */
+.inv-file-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  background-color: #1a1a1a;
+  border: 1.5px dashed rgba(255, 255, 255, 0.16);
+  padding: 2rem 1.5rem;
+  cursor: pointer;
+  color: #7f8c8d;
+  transition: var(--transition-luxury);
+}
+
+.inv-file-drop-zone:hover,
+.inv-file-drop-zone.is-drag-active {
+  border-color: var(--color-accent);
+  background-color: rgba(197, 168, 128, 0.06);
+  color: var(--color-accent);
+}
+
+.inv-file-drop-text {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: #d8d8d8;
+}
+
+.inv-file-drop-zone:hover .inv-file-drop-text,
+.inv-file-drop-zone.is-drag-active .inv-file-drop-text {
+  color: var(--color-accent);
+}
+
+.inv-file-drop-hint {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  color: #6a6a6a;
+}
+
+/* --- Shared preview --- */
+.inv-image-preview-wrap {
+  align-items: center;
+  gap: 0.85rem;
+  background-color: #1a1a1a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem;
+}
+
+.inv-image-preview {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--color-accent);
+  padding: 2px;
+  background: #111;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.inv-image-preview-clear {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: transparent;
+  color: #9a9a9a;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-luxury);
+  margin-left: auto;
+}
+
+.inv-image-preview-clear:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
 /* ── SIZE PRICING BLOCK ── */
 .inv-size-pricing-block {
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -2973,7 +3449,6 @@
 
 .rtw-modal-submit:hover:not(:disabled) {
   background-color: #d4b97a;
-  box-shadow: 0 8px 20px rgba(197, 168, 128, 0.25);
 }
 
 .rtw-modal-submit:disabled {

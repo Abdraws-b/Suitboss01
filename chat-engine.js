@@ -94,6 +94,16 @@ export function initClientChat(uid, email) {
     // of sending a new one.
     if (editingMessageId) {
       const messageIdBeingEdited = editingMessageId;
+
+      // Re-checked here too, not just when the Edit button was clicked —
+      // the composer could stay open well past 60 seconds before the
+      // person actually hits send.
+      if (!isWithinEditWindow(getCachedMessage(messageIdBeingEdited))) {
+        cancelEditing();
+        showAtelierNotification("This message can no longer be edited — the 60-second edit window has passed.", "error");
+        return;
+      }
+
       input.value = "";
       autoGrowTextarea(input);
       cancelEditing();
@@ -273,6 +283,13 @@ function openAdminThread(clientId, clientEmail) {
 
     if (editingMessageId) {
       const messageIdBeingEdited = editingMessageId;
+
+      if (!isWithinEditWindow(getCachedMessage(messageIdBeingEdited))) {
+        cancelEditing();
+        showAtelierNotification("This message can no longer be edited — the 60-second edit window has passed.", "error");
+        return;
+      }
+
       input.value = "";
       autoGrowTextarea(input);
       cancelEditing();
@@ -398,17 +415,39 @@ function buildChatShell({ eyebrow, heading }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MESSAGE ACTION MENU — copy / edit / delete / forward
+//
+// Edit is time-limited to 60 seconds after a message is sent, the same
+// pattern WhatsApp and most other messaging apps use — a message shouldn't
+// be silently rewritable indefinitely after the other person has already
+// read and possibly replied to it. Copy, Forward, and Delete stay available
+// with no time limit; only Edit is gated.
 // ─────────────────────────────────────────────────────────────────────────────
+const EDIT_WINDOW_MS = 60 * 1000;
+
+/**
+ * True if the given cached message is still inside its edit window. A
+ * message with no createdAt yet (the brief moment before serverTimestamp()
+ * resolves locally) is treated as editable — it was, by definition, just
+ * sent a moment ago.
+ */
+function isWithinEditWindow(cachedMessage) {
+  if (!cachedMessage) return false;
+  if (!cachedMessage.createdAt?.toDate) return true;
+  const sentAt = cachedMessage.createdAt.toDate().getTime();
+  return Date.now() - sentAt < EDIT_WINDOW_MS;
+}
+
 function openBubbleContextMenu(triggerBtn) {
   const menu = document.getElementById("chat-bubble-context-menu");
   if (!menu) return;
 
   const messageId = triggerBtn.dataset.messageId;
   const canForward = currentViewerRole === "staff" && cachedConversationSummaries.length > 1;
+  const canEdit = isWithinEditWindow(getCachedMessage(messageId));
 
   menu.innerHTML = `
     <button type="button" data-action="copy">${copyIconSvg()}<span>Copy</span></button>
-    <button type="button" data-action="edit">${editIconSvg()}<span>Edit</span></button>
+    ${canEdit ? `<button type="button" data-action="edit">${editIconSvg()}<span>Edit</span></button>` : ""}
     ${canForward ? `<button type="button" data-action="forward">${forwardIconSvg()}<span>Forward</span></button>` : ""}
     <button type="button" data-action="delete" class="is-danger">${trashIconSvg()}<span>Delete</span></button>
   `;
@@ -458,6 +497,13 @@ async function handleBubbleMenuAction(action, messageId) {
   }
 
   if (action === "edit") {
+    // Re-check here, not just when the menu was built — the menu could have
+    // been opened at 59 seconds and clicked at 61, and the button's own
+    // presence in the menu isn't re-evaluated between those two moments.
+    if (!isWithinEditWindow(cached)) {
+      showAtelierNotification("This message can no longer be edited — the 60-second edit window has passed.", "error");
+      return;
+    }
     const input = document.getElementById("chat-input");
     if (!input) return;
     input.value = text;

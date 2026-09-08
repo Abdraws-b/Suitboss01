@@ -28,7 +28,6 @@ let isRegistrationState = false;
 
 export function initAuthEngine() {
     const authForm   = document.getElementById("auth-credential-form");
-    const toggleLink = document.getElementById("toggle-to-register");
     const submitBtn  = document.getElementById("auth-submit-btn");
     const paneTitle  = document.querySelector(".auth-pane-title");
     const paneSwitch = document.querySelector(".auth-pane-switch");
@@ -194,23 +193,41 @@ export function initAuthEngine() {
 
     // -----------------------------------------------------------------------
     // UI STATE TOGGLE  ·  Login ⇆ Register
+    //
+    // THE FIX: the listener used to be bound directly to toggleLink (the
+    // original <a id="toggle-to-register">). But the handler itself
+    // rewrites paneSwitch.innerHTML on every click — which destroys that
+    // original <a> and creates a brand-new one with the same id but zero
+    // listeners attached. First click worked (the original node still had
+    // its listener); the second click did nothing, because "Authorize
+    // Entry" was a freshly-created node that was never wired up. Same
+    // problem in reverse on every toggle after that.
+    //
+    // Delegating the listener to paneSwitch itself — a stable parent <p>
+    // that innerHTML only rewrites the *inside* of, never replaces itself —
+    // means the listener survives every rewrite. e.target.closest() finds
+    // whichever #toggle-to-register anchor currently exists inside it,
+    // regardless of how many times it's been swapped out.
     // -----------------------------------------------------------------------
-    if (toggleLink && !toggleLink.dataset.listenerAttached) {
-        toggleLink.dataset.listenerAttached = "true";
+    if (paneSwitch && !paneSwitch.dataset.listenerAttached) {
+        paneSwitch.dataset.listenerAttached = "true";
 
-        toggleLink.addEventListener("click", (e) => {
+        paneSwitch.addEventListener("click", (e) => {
+            const clickedToggle = e.target.closest("#toggle-to-register");
+            if (!clickedToggle) return;
+
             e.preventDefault();
             isRegistrationState = !isRegistrationState;
 
             if (isRegistrationState) {
                 if (paneTitle)  paneTitle.textContent = "Create Atelier Profile";
                 if (submitBtn)  submitBtn.textContent = "Register & Create Blueprint";
-                if (paneSwitch) paneSwitch.innerHTML  =
+                paneSwitch.innerHTML =
                     `Already registered? <a href="#login" id="toggle-to-register">Authorize Entry</a>`;
             } else {
                 if (paneTitle)  paneTitle.textContent = "Atelier Access";
                 if (submitBtn)  submitBtn.textContent = "Authorize Entry";
-                if (paneSwitch) paneSwitch.innerHTML  =
+                paneSwitch.innerHTML =
                     `New to the studio? <a href="#register" id="toggle-to-register">Create an account</a>`;
             }
         });

@@ -16,6 +16,7 @@ import {
   addDoc,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+import { getStorage } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 import { initAuthEngine } from "./auth.js";
 import { showAtelierNotification } from "./ui-feedback.js";
 // order-engine.js and dashboard.js are intentionally NOT statically imported
@@ -40,6 +41,7 @@ const analytics = getAnalytics(app);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AUTH-READY GATE

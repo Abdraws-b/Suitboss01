@@ -11,7 +11,12 @@ import {
   deleteDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-import { db } from "./app.js";
+import {
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
+import { db, storage } from "./app.js";
 import { showAtelierNotification } from "./ui-feedback.js";
 import { initClientChat, initAdminChat, teardownChatWidget } from "./chat-engine.js";
 
@@ -66,6 +71,210 @@ function extractFirstNameFromEmail(email) {
   return rawName.charAt(0).toUpperCase() + rawName.slice(1).toLowerCase();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD SIDEBAR SHELL — shared between client and admin dashboards
+//
+// One collapsible sidebar (icon + label nav, collapses to icon-only, state
+// remembered across visits via localStorage) plus a single content pane
+// that gets re-rendered per section. Sections mount their own Firestore
+// listener when opened and tear it down when the admin/client switches
+// away — teardownAllSectionListeners() below is the one place that closes
+// every tracked listener, called both on dashboard remount and on every
+// section switch, so nothing can leak regardless of which screen was open.
+// ─────────────────────────────────────────────────────────────────────────────
+const SIDEBAR_COLLAPSE_KEY = "suitboss_sidebar_collapsed";
+
+function teardownAllSectionListeners() {
+  if (window.activeDashboardUnsubscribe) {
+    window.activeDashboardUnsubscribe();
+    window.activeDashboardUnsubscribe = null;
+  }
+  if (window.activeInventoryUnsubscribe) {
+    window.activeInventoryUnsubscribe();
+    window.activeInventoryUnsubscribe = null;
+  }
+  if (window.activeMetricsUnsubscribe) {
+    window.activeMetricsUnsubscribe();
+    window.activeMetricsUnsubscribe = null;
+  }
+  if (window.activeRtwModalUnsubscribe) {
+    window.activeRtwModalUnsubscribe();
+    window.activeRtwModalUnsubscribe = null;
+  }
+}
+
+function buildDashboardSidebarShell(sections) {
+  const navItemsHtml = sections.map((s) => `
+    <li>
+      <button type="button" class="dash-nav-item" data-section="${s.id}" title="${s.label}">
+        <span class="dash-nav-icon" aria-hidden="true">${s.icon}</span>
+        <span class="dash-nav-label">${s.label}</span>
+        ${s.badgeId ? `<span class="dash-nav-badge" id="${s.badgeId}" style="display: none;">0</span>` : ""}
+      </button>
+    </li>
+  `).join("");
+
+  return `
+    <div class="dash-shell" id="dash-shell">
+      <aside class="dash-sidebar" id="dash-sidebar">
+        <button type="button" class="dash-sidebar-collapse-btn" id="dash-sidebar-collapse-btn" aria-label="Collapse sidebar" aria-expanded="true">
+          ${chevronIconSvg()}
+        </button>
+        <nav class="dash-sidebar-nav" aria-label="Dashboard sections">
+          <ul>${navItemsHtml}</ul>
+        </nav>
+        <div class="dash-sidebar-footer">
+          <a href="#logout" class="dash-nav-item dash-nav-signout nav-logout js-logout-btn" title="Sign Out">
+            <span class="dash-nav-icon" aria-hidden="true">${signOutIconSvg()}</span>
+            <span class="dash-nav-label">Sign Out</span>
+          </a>
+        </div>
+      </aside>
+      <div class="dash-content-pane" id="dash-content-pane"></div>
+    </div>
+  `;
+}
+
+/**
+ * Wires the collapse toggle and nav-item clicks. onSectionChange(sectionId)
+ * is called with no listener bookkeeping of its own — each section-mount
+ * function is responsible for calling teardownAllSectionListeners() itself
+ * before setting up whatever it needs, so this stays a thin router.
+ */
+function wireDashboardSidebar(defaultSectionId, onSectionChange) {
+  const shell = document.getElementById("dash-shell");
+  const collapseBtn = document.getElementById("dash-sidebar-collapse-btn");
+  if (!shell || !collapseBtn) return;
+
+  const startCollapsed = localStorage.getItem(SIDEBAR_COLLAPSE_KEY) === "true";
+  if (startCollapsed) shell.classList.add("is-collapsed");
+  collapseBtn.setAttribute("aria-expanded", startCollapsed ? "false" : "true");
+
+  collapseBtn.addEventListener("click", () => {
+    const nowCollapsed = shell.classList.toggle("is-collapsed");
+    collapseBtn.setAttribute("aria-expanded", nowCollapsed ? "false" : "true");
+    localStorage.setItem(SIDEBAR_COLLAPSE_KEY, String(nowCollapsed));
+  });
+
+  const navButtons = shell.querySelectorAll(".dash-nav-item[data-section]");
+  navButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      navButtons.forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
+      onSectionChange(btn.dataset.section);
+    });
+  });
+
+  const defaultBtn = shell.querySelector(`.dash-nav-item[data-section="${defaultSectionId}"]`);
+  if (defaultBtn) defaultBtn.classList.add("is-active");
+}
+
+/** Programmatically activates a sidebar section, e.g. from a "View All" link inside a section's own content. */
+function navigateToSidebarSection(sectionId) {
+  const btn = document.querySelector(`.dash-nav-item[data-section="${sectionId}"]`);
+  if (btn) btn.click();
+}
+
+// Recognized silhouette slugs that indicate a Ready-To-Wear order even on
+// older documents that predate the explicit orderType field. Hoisted to
+// module scope since both the client dashboard's order sections and the
+// notifications feed need the same classification logic.
+const RTW_SILHOUETTE_SLUGS = new Set([
+  "signature-kaftan",
+  "bespoke-two-piece",
+  "luxury-agbada",
+  "printed-apparel",
+]);
+
+function isReadyToWearOrder(orderData) {
+  return orderData.orderType === "Ready-To-Wear" ||
+    RTW_SILHOUETTE_SLUGS.has(orderData.configuration?.silhouette);
+}
+
+/** Renders one client-facing order card. Shared by the overview preview, My Orders, Bespoke Orders, and Ready to Wear sections — they differ only in which documents they pass in. */
+function buildClientOrderCardHtml(orderDoc) {
+  const orderData = orderDoc.data();
+  const shortId = orderDoc.id.substring(0, 8).toUpperCase();
+
+  const status = orderData.commissionStatus || "Pending Studio Review";
+  let progressWidth = "15%";
+  let statusClass = "status-pending";
+
+  if (status === "In Cutting Stage") {
+    progressWidth = "45%";
+    statusClass = "status-cutting";
+  } else if (status === "Assembled & Awaiting Fitting") {
+    progressWidth = "75%";
+    statusClass = "status-fitting";
+  } else if (status === "Completed & Shipped") {
+    progressWidth = "100%";
+    statusClass = "status-completed";
+  }
+
+  const isRTW = isReadyToWearOrder(orderData);
+  const imageUrl = orderData.apparelImage || orderData.imageUrl || "";
+
+  let thumbnailHtml = "";
+  if (isRTW && imageUrl) {
+    thumbnailHtml = `
+      <img
+        src="${imageUrl}"
+        alt="${orderData.collectionName || 'Garment preview'}"
+        style="width: 60px; height: 60px; object-fit: cover; border: 1px solid var(--color-accent); padding: 2px; background: #111; border-radius: 2px; flex-shrink: 0;"
+        loading="lazy"
+      >
+    `;
+  }
+
+  const orderTitle = isRTW
+    ? (orderData.collectionName || "Ready-To-Wear Piece")
+    : formatGarmentName(orderData.configuration?.silhouette);
+
+  const orderSubline = isRTW
+    ? (orderData.selectedSize ? `Size: ${orderData.selectedSize}` : "Ready-To-Wear")
+    : `Material Layer: ${formatTextileName(orderData.configuration?.textileProfile)}`;
+
+  let deliveryNotesHtml = "";
+  if (typeof orderData.deliveryNotes === "string" && orderData.deliveryNotes.trim().length > 0) {
+    deliveryNotesHtml = `
+      <div class="studio-message-panel" style="margin-top: 0.85rem; padding: 0.85rem 1rem; border: 1px solid var(--color-accent); border-left: 3px solid var(--color-accent); background: rgba(197, 168, 128, 0.08); border-radius: 2px;">
+        <p style="margin: 0 0 0.25rem 0; font-family: var(--font-body); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Studio Message</p>
+        <p style="margin: 0; font-size: 0.92rem; line-height: 1.45;">${escapeHtmlForDisplay(orderData.deliveryNotes)}</p>
+      </div>
+    `;
+  }
+
+  const studioDispatchNote = `<p class="studio-dispatch-note">${
+    orderData.deliveryNotes
+      ? `<strong>Delivery Log:</strong> ${escapeHtmlForDisplay(orderData.deliveryNotes)}`
+      : "Your garment is being meticulously curated at the studio cutting desk."
+  }</p>`;
+
+  return `
+    <div class="client-order-row-card">
+      <div class="client-order-top-row">
+        ${thumbnailHtml}
+        <div class="client-order-meta">
+          <span class="badge-order-id">SB-${shortId}</span>
+          <h4 class="client-order-title">${orderTitle}</h4>
+          <p class="client-order-textile">${orderSubline}</p>
+        </div>
+        <div class="client-order-status-block">
+          <div class="pipeline-indicator-pill ${statusClass}">${status}</div>
+          <div class="financial-indicator-pill ${orderData.financialStatus === 'Settled' ? 'paid-token' : 'unpaid-token'}">
+            ${orderData.financialStatus || "Awaiting Invoice"}
+          </div>
+        </div>
+      </div>
+      <div class="atelier-progress-track">
+        <div class="atelier-progress-bar ${statusClass}" style="width: ${progressWidth}"></div>
+      </div>
+      ${deliveryNotesHtml}
+      ${studioDispatchNote}
+    </div>
+  `;
+}
+
 export async function mountAtelierDashboard(uid) {
   const mainContent = document.getElementById("main-content");
   if (!mainContent) return;
@@ -96,9 +305,6 @@ export async function mountAtelierDashboard(uid) {
       window.activeRtwModalUnsubscribe();
       window.activeRtwModalUnsubscribe = null;
     }
-    // The boutique orders modal itself, if it happened to be open when the
-    // dashboard remounted, shouldn't survive into the fresh render.
-    closeBoutiqueOrdersModal();
 
     // Same for the chat widget — its listeners (thread/list/badge) are all
     // independent of the streams above and need their own explicit teardown.
@@ -164,294 +370,297 @@ async function renderClientLedgerDashboard(uid) {
     const userDocRef = doc(db, "users", uid);
     const userSnap = await getDoc(userDocRef);
     const profileData = userSnap.data() || {};
-    const blueprint = profileData.measurementBlueprint || {};
 
-    mainContent.innerHTML = `
-      <div class="dashboard-wrapper">
-        <div class="dashboard-header-row">
-          <div class="dash-greeting-block">
-            <p class="dash-greeting-eyebrow">Private Studio Ledger</p>
-            <h1 class="dash-welcome-title dash-greeting-title">
-              ${getTimeBasedGreeting()}, <span class="dash-greeting-name">${extractFirstNameFromEmail(profileData.email)}</span>
-            </h1>
-            <p class="dash-welcome-sub dash-greeting-fade">Manage your anatomical blueprint and track active commissions.</p>
-          </div>
-          <div class="client-meta-badge">Profile: ${profileData.email || 'Bespoke Client'}</div>
-        </div>
+    const sections = [
+      { id: "overview", label: "Overview", icon: overviewIconSvg() },
+      { id: "orders", label: "My Orders", icon: packageIconSvg() },
+      { id: "bespoke", label: "Bespoke Orders", icon: rulerIconSvg() },
+      { id: "rtw", label: "Ready to Wear", icon: hangerIconSvg() },
+      { id: "notifications", label: "Notifications", icon: bellIconSvg() },
+      { id: "profile", label: "My Profile", icon: personIconSvg() },
+    ];
 
-        <div class="dashboard-grid-layout">
-          <div class="dashboard-card-pane">
-            <h3 class="card-pane-title">Archived Blueprint Proportions</h3>
-            <p class="card-pane-sub">Adjust your stored metrics below. Active cuts will update instantly upon saving.</p>
-            
-            <form id="dashboard-blueprint-form" class="blueprint-inline-form">
-              <div class="blueprint-input-grid">
-                <div class="metric-input-field">
-                  <label for="dash-neck">Neck (cm)</label>
-                  <input type="number" id="dash-neck" value="${blueprint.neck || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-chest">Chest (cm)</label>
-                  <input type="number" id="dash-chest" value="${blueprint.chest || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-shoulder">Shoulder (cm)</label>
-                  <input type="number" id="dash-shoulder" value="${blueprint.shoulder || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-sleeve">Sleeve (cm)</label>
-                  <input type="number" id="dash-sleeve" value="${blueprint.sleeve || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-waist">Waist (cm)</label>
-                  <input type="number" id="dash-waist" value="${blueprint.waist || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-hips">Hips (cm)</label>
-                  <input type="number" id="dash-hips" value="${blueprint.hips || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-outseam">Outseam (cm)</label>
-                  <input type="number" id="dash-outseam" value="${blueprint.outseam || ''}" step="0.1" placeholder="--">
-                </div>
-                <div class="metric-input-field">
-                  <label for="dash-inseam">Inseam (cm)</label>
-                  <input type="number" id="dash-inseam" value="${blueprint.inseam || ''}" step="0.1" placeholder="--">
-                </div>
-              </div>
-              <button type="submit" class="btn-dashboard-save">Save Metric Shifts</button>
-            </form>
-          </div>
+    mainContent.innerHTML = buildDashboardSidebarShell(sections);
+    wireDashboardSidebar("overview", (sectionId) => mountClientSection(sectionId, uid, userDocRef, profileData));
+    mountClientSection("overview", uid, userDocRef, profileData);
 
-          <div class="dashboard-card-pane">
-            <h3 class="card-pane-title">Active Production Tracker</h3>
-            <p class="card-pane-sub">Real-time pipeline overview directly from our cutting room floor.</p>
-            <div id="client-active-orders-stream" class="orders-stream-box">
-              <p class="loading-mini">Synchronizing server records...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    `;
-
-    const blueprintForm = document.getElementById("dashboard-blueprint-form");
-    blueprintForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-
-      const freshBlueprint = {
-        neck: parseFloat(document.getElementById("dash-neck").value) || null,
-        chest: parseFloat(document.getElementById("dash-chest").value) || null,
-        shoulder: parseFloat(document.getElementById("dash-shoulder").value) || null,
-        sleeve: parseFloat(document.getElementById("dash-sleeve").value) || null,
-        waist: parseFloat(document.getElementById("dash-waist").value) || null,
-        hips: parseFloat(document.getElementById("dash-hips").value) || null,
-        outseam: parseFloat(document.getElementById("dash-outseam").value) || null,
-        inseam: parseFloat(document.getElementById("dash-inseam").value) || null,
-      };
-
-      const ValidationBounds = { min: 30, max: 200 };
-      let validationError = null;
-
-      for (const [key, val] of Object.entries(freshBlueprint)) {
-        if (val !== null && (val < ValidationBounds.min || val > ValidationBounds.max)) {
-          validationError = `The entry for ${key} must sit between valid dimensions (${ValidationBounds.min}cm - ${ValidationBounds.max}cm).`;
-          break;
-        }
-      }
-
-      if (validationError) {
-        showAtelierNotification(validationError, "error");
-        return;
-      }
-
-      try {
-        await updateDoc(userDocRef, {
-          measurementBlueprint: {
-            ...freshBlueprint,
-            lastUpdated: serverTimestamp()
-          }
-        });
-        showAtelierNotification("Anatomical configuration updated securely inside your ledger.");
-      } catch (err) {
-        console.error("Failed to post blueprint shift edits to Firestore:", err);
-        showAtelierNotification("Database sync failed. Please check network protocols.", "error");
-      }
-    });
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // TASK 1B — CLIENT ORDER LIST SNAPSHOT
-    // Refactored: introduces image thumbnail frame for Ready-To-Wear orders.
-    // Condition: orderType === "Ready-To-Wear" with an `apparelImage` property,
-    // OR configuration.silhouette maps to a known RTW silhouette slug.
-    // Thumbnail frame spec: 60×60 px, object-fit:cover, 1px solid var(--color-accent),
-    // padding 2px, background #111, border-radius 2px.
-    // ─────────────────────────────────────────────────────────────────────────
-    const RTW_SILHOUETTE_SLUGS = new Set([
-      "signature-kaftan",
-      "bespoke-two-piece",
-      "luxury-agbada",
-      "printed-apparel",
-    ]);
-
-    const ordersStreamBox = document.getElementById("client-active-orders-stream");
-    const ordersQuery = query(
-      collection(db, "orders"),
-      where("clientId", "==", uid)
-    );
-
-    window.activeDashboardUnsubscribe = onSnapshot(ordersQuery, (snapshot) => {
-      if (snapshot.empty) {
-        ordersStreamBox.innerHTML = `
-          <div class="empty-stream-card">
-            <p>No commissions found under your profile token.</p>
-            <a href="custom-order.html" class="inline-atelier-link">File a Bespoke Pre-Order →</a>
-          </div>
-        `;
-        return;
-      }
-
-      let ordersHtml = "";
-      const sortedDocs = snapshot.docs.slice().sort((a, b) => {
-        const tA = a.data().orderCreatedTimestamp?.toMillis?.() || 0;
-        const tB = b.data().orderCreatedTimestamp?.toMillis?.() || 0;
-        return tB - tA;
-      });
-
-      sortedDocs.forEach((orderDoc) => {
-        const orderData = orderDoc.data();
-        const shortId = orderDoc.id.substring(0, 8).toUpperCase();
-
-        const status = orderData.commissionStatus || "Pending Studio Review";
-        let progressWidth = "15%";
-        let statusClass = "status-pending";
-
-        if (status === "In Cutting Stage") {
-          progressWidth = "45%";
-          statusClass = "status-cutting";
-        } else if (status === "Assembled & Awaiting Fitting") {
-          progressWidth = "75%";
-          statusClass = "status-fitting";
-        } else if (status === "Completed & Shipped") {
-          progressWidth = "100%";
-          statusClass = "status-completed";
-        }
-
-        // ── THUMBNAIL LOGIC ──────────────────────────────────────────────────
-        // Show a thumbnail when:
-        //   (a) orderType is "Ready-To-Wear" AND the doc has an `apparelImage`
-        //   (b) OR the configuration.silhouette maps to a known RTW slug
-        const isRTW =
-          orderData.orderType === "Ready-To-Wear" ||
-          RTW_SILHOUETTE_SLUGS.has(orderData.configuration?.silhouette);
-
-        const imageUrl =
-          orderData.apparelImage ||
-          orderData.imageUrl ||
-          "";
-
-        let thumbnailHtml = "";
-        if (isRTW && imageUrl) {
-          thumbnailHtml = `
-            <img
-              src="${imageUrl}"
-              alt="${orderData.collectionName || 'Garment preview'}"
-              style="
-                width: 60px;
-                height: 60px;
-                object-fit: cover;
-                border: 1px solid var(--color-accent);
-                padding: 2px;
-                background: #111;
-                border-radius: 2px;
-                flex-shrink: 0;
-              "
-              loading="lazy"
-            >
-          `;
-        }
-
-        // Resolve display title and sub-line per order type
-        const orderTitle = (orderData.orderType || "Bespoke Commission") === "Ready-To-Wear"
-          ? (orderData.collectionName || "Ready-To-Wear Piece")
-          : formatGarmentName(orderData.configuration?.silhouette);
-
-        const orderSubline = (orderData.orderType || "Bespoke Commission") === "Ready-To-Wear"
-          ? (orderData.selectedSize ? `Size: ${orderData.selectedSize}` : "Ready-To-Wear")
-          : `Material Layer: ${formatTextileName(orderData.configuration?.textileProfile)}`;
-
-        // ── TASK 3: STUDIO MESSAGE / DELIVERY NOTES PANEL ──────────────────
-        // If the admin has written a deliveryNotes string onto this order,
-        // surface it prominently in a focused gold accent panel.
-        let deliveryNotesHtml = "";
-        if (typeof orderData.deliveryNotes === "string" && orderData.deliveryNotes.trim().length > 0) {
-          deliveryNotesHtml = `
-            <div class="studio-message-panel" style="
-              margin-top: 0.85rem;
-              padding: 0.85rem 1rem;
-              border: 1px solid var(--color-accent);
-              border-left: 3px solid var(--color-accent);
-              background: rgba(197, 168, 128, 0.08);
-              border-radius: 2px;
-            ">
-              <p style="
-                margin: 0 0 0.25rem 0;
-                font-family: var(--font-body);
-                font-size: 0.7rem;
-                letter-spacing: 0.12em;
-                text-transform: uppercase;
-                color: var(--color-accent);
-              ">Studio Message</p>
-              <p style="margin: 0; font-size: 0.92rem; line-height: 1.45;">
-                ${escapeHtmlForDisplay(orderData.deliveryNotes)}
-              </p>
-            </div>
-          `;
-        }
-
-        const studioDispatchNote = `<p class="studio-dispatch-note">${
-          orderData.deliveryNotes
-            ? `<strong>Delivery Log:</strong> ${escapeHtmlForDisplay(orderData.deliveryNotes)}`
-            : "Your garment is being meticulously curated at the studio cutting desk."
-        }</p>`;
-
-        ordersHtml += `
-          <div class="client-order-row-card">
-            <div class="client-order-top-row">
-              ${thumbnailHtml}
-              <div class="client-order-meta">
-                <span class="badge-order-id">SB-${shortId}</span>
-                <h4 class="client-order-title">${orderTitle}</h4>
-                <p class="client-order-textile">${orderSubline}</p>
-              </div>
-              <div class="client-order-status-block">
-                <div class="pipeline-indicator-pill ${statusClass}">${status}</div>
-                <div class="financial-indicator-pill ${orderData.financialStatus === 'Settled' ? 'paid-token' : 'unpaid-token'}">
-                  ${orderData.financialStatus || "Awaiting Invoice"}
-                </div>
-              </div>
-            </div>
-            <div class="atelier-progress-track">
-              <div class="atelier-progress-bar ${statusClass}" style="width: ${progressWidth}"></div>
-            </div>
-            ${deliveryNotesHtml}
-            ${studioDispatchNote}
-          </div>
-        `;
-      });
-
-      ordersStreamBox.innerHTML = ordersHtml;
-    }, (err) => {
-      console.error("Client side snapshot connection drop error:", err);
-      ordersStreamBox.innerHTML = `<p class="error-text">Failed to establish active updates link with streaming servers.<br><small>${err.code || ''}: ${err.message || err}</small></p>`;
-    });
-
-    // Real-time studio support chat — floating glass launcher, single thread
+    // Real-time studio support chat — floating glass launcher, persists
+    // across every section switch since it lives outside the content pane.
     initClientChat(uid, profileData.email);
 
   } catch (error) {
     console.error("Failure constructing client dashboard layout sheets:", error);
     mainContent.innerHTML = `<p class="error-text" style="text-align:center; padding:5rem;">Dashboard load error. Please refresh.</p>`;
   }
+}
+
+/** Routes a sidebar click to the right section-mount function, closing any listener the previous section had open first. */
+function mountClientSection(sectionId, uid, userDocRef, profileData) {
+  const pane = document.getElementById("dash-content-pane");
+  if (!pane) return;
+
+  teardownAllSectionListeners();
+
+  if (sectionId === "profile") {
+    mountClientProfileSection(pane, userDocRef, profileData);
+  } else if (sectionId === "notifications") {
+    mountClientNotificationsSection(pane, uid);
+  } else {
+    // "overview", "orders", "bespoke", and "rtw" all share the same
+    // order-stream rendering — they differ only in header copy and which
+    // documents get filtered in.
+    mountClientOrdersSection(pane, uid, sectionId, profileData);
+  }
+}
+
+/**
+ * Renders the client's order list — used directly by My Orders, Bespoke
+ * Orders, and Ready to Wear, and in a condensed form (greeting + quick
+ * stats + 3 most recent) by Overview.
+ */
+function mountClientOrdersSection(pane, uid, mode, profileData) {
+  const isOverview = mode === "overview";
+  const headerCopy = {
+    overview: { title: `${getTimeBasedGreeting()}, ${extractFirstNameFromEmail(profileData.email)}`, sub: "Manage your anatomical blueprint and track active commissions." },
+    orders:   { title: "My Orders", sub: "Every bespoke commission and boutique order tied to your profile." },
+    bespoke:  { title: "Bespoke Orders", sub: "Made-to-measure commissions currently in production." },
+    rtw:      { title: "Ready to Wear", sub: "Boutique pieces ordered straight from the Lookbook." },
+  }[mode];
+
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Private Studio Ledger</p>
+        <h1 class="dash-section-title">${headerCopy.title}</h1>
+        <p class="dash-section-sub">${headerCopy.sub}</p>
+      </div>
+    </div>
+    ${isOverview ? `<div class="dash-stat-row" id="dash-stat-row"></div>` : ""}
+    <div class="dashboard-card-pane dash-section-body">
+      <h3 class="card-pane-title">${isOverview ? "Recent Activity" : "Active Production Tracker"}</h3>
+      <p class="card-pane-sub">Real-time pipeline overview directly from our cutting room floor.</p>
+      <div id="client-active-orders-stream" class="orders-stream-box">
+        <p class="loading-mini">Synchronizing server records...</p>
+      </div>
+      ${isOverview ? `<button type="button" class="btn-dash-view-all" id="dash-view-all-orders">View All Orders →</button>` : ""}
+    </div>
+  `;
+
+  if (isOverview) {
+    const viewAllBtn = document.getElementById("dash-view-all-orders");
+    if (viewAllBtn) viewAllBtn.addEventListener("click", () => navigateToSidebarSection("orders"));
+  }
+
+  const ordersStreamBox = document.getElementById("client-active-orders-stream");
+  const statRow = document.getElementById("dash-stat-row");
+  const ordersQuery = query(collection(db, "orders"), where("clientId", "==", uid));
+
+  window.activeDashboardUnsubscribe = onSnapshot(ordersQuery, (snapshot) => {
+    const allDocs = snapshot.docs.slice().sort((a, b) => {
+      const tA = a.data().orderCreatedTimestamp?.toMillis?.() || 0;
+      const tB = b.data().orderCreatedTimestamp?.toMillis?.() || 0;
+      return tB - tA;
+    });
+
+    let visibleDocs = allDocs;
+    if (mode === "bespoke") visibleDocs = allDocs.filter((d) => !isReadyToWearOrder(d.data()));
+    if (mode === "rtw") visibleDocs = allDocs.filter((d) => isReadyToWearOrder(d.data()));
+    if (isOverview) visibleDocs = allDocs.slice(0, 3);
+
+    if (statRow) {
+      const activeCount = allDocs.filter((d) => d.data().commissionStatus !== "Completed & Shipped").length;
+      const pendingCount = allDocs.filter((d) => (d.data().commissionStatus || "Pending Studio Review") === "Pending Studio Review").length;
+      const completedCount = allDocs.filter((d) => d.data().commissionStatus === "Completed & Shipped").length;
+      statRow.innerHTML = `
+        <div class="dash-stat-card"><span class="dash-stat-value">${activeCount}</span><span class="dash-stat-label">Active Commissions</span></div>
+        <div class="dash-stat-card"><span class="dash-stat-value">${pendingCount}</span><span class="dash-stat-label">Pending Review</span></div>
+        <div class="dash-stat-card"><span class="dash-stat-value">${completedCount}</span><span class="dash-stat-label">Completed</span></div>
+      `;
+    }
+
+    if (visibleDocs.length === 0) {
+      ordersStreamBox.innerHTML = `
+        <div class="empty-stream-card">
+          <p>No commissions found under your profile token.</p>
+          <a href="custom-order.html" class="inline-atelier-link">File a Bespoke Pre-Order →</a>
+        </div>
+      `;
+      return;
+    }
+
+    ordersStreamBox.innerHTML = visibleDocs.map(buildClientOrderCardHtml).join("");
+  }, (err) => {
+    console.error("Client side snapshot connection drop error:", err);
+    ordersStreamBox.innerHTML = `<p class="error-text">Failed to establish active updates link with streaming servers.<br><small>${err.code || ''}: ${err.message || err}</small></p>`;
+  });
+}
+
+/**
+ * Notifications: a chronological feed of studio messages (deliveryNotes)
+ * left on the client's own orders — not a separate Firestore collection,
+ * just a different view over data that already exists, so there's nothing
+ * new to keep in sync.
+ */
+function mountClientNotificationsSection(pane, uid) {
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Private Studio Ledger</p>
+        <h1 class="dash-section-title">Notifications</h1>
+        <p class="dash-section-sub">Studio updates left on your active and past commissions.</p>
+      </div>
+    </div>
+    <div class="dashboard-card-pane dash-section-body">
+      <div id="client-notifications-stream" class="orders-stream-box">
+        <p class="loading-mini">Synchronizing server records...</p>
+      </div>
+    </div>
+  `;
+
+  const streamBox = document.getElementById("client-notifications-stream");
+  const ordersQuery = query(collection(db, "orders"), where("clientId", "==", uid));
+
+  window.activeDashboardUnsubscribe = onSnapshot(ordersQuery, (snapshot) => {
+    const withNotes = snapshot.docs
+      .filter((d) => typeof d.data().deliveryNotes === "string" && d.data().deliveryNotes.trim().length > 0)
+      .sort((a, b) => {
+        const tA = a.data().orderCreatedTimestamp?.toMillis?.() || 0;
+        const tB = b.data().orderCreatedTimestamp?.toMillis?.() || 0;
+        return tB - tA;
+      });
+
+    if (withNotes.length === 0) {
+      streamBox.innerHTML = `
+        <div class="empty-stream-card">
+          <p>No studio notifications yet — updates on your orders will appear here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    streamBox.innerHTML = withNotes.map((orderDoc) => {
+      const data = orderDoc.data();
+      const shortId = orderDoc.id.substring(0, 8).toUpperCase();
+      const title = isReadyToWearOrder(data)
+        ? (data.collectionName || "Ready-To-Wear Piece")
+        : formatGarmentName(data.configuration?.silhouette);
+      return `
+        <div class="client-order-row-card">
+          <div class="client-order-meta">
+            <span class="badge-order-id">SB-${shortId}</span>
+            <h4 class="client-order-title">${escapeHtmlForDisplay(title)}</h4>
+          </div>
+          <div class="studio-message-panel" style="margin-top: 0.6rem; padding: 0.85rem 1rem; border: 1px solid var(--color-accent); border-left: 3px solid var(--color-accent); background: rgba(197, 168, 128, 0.08); border-radius: 2px;">
+            <p style="margin: 0 0 0.25rem 0; font-family: var(--font-body); font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--color-accent);">Studio Message</p>
+            <p style="margin: 0; font-size: 0.92rem; line-height: 1.45;">${escapeHtmlForDisplay(data.deliveryNotes)}</p>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }, (err) => {
+    console.error("Client notifications snapshot error:", err);
+    streamBox.innerHTML = `<p class="error-text">Failed to load notifications.<br><small>${err.code || ''}: ${err.message || err}</small></p>`;
+  });
+}
+
+/** My Profile — the measurement blueprint editor, unchanged from before, just relocated into its own section. */
+function mountClientProfileSection(pane, userDocRef, profileData) {
+  const blueprint = profileData.measurementBlueprint || {};
+
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Private Studio Ledger</p>
+        <h1 class="dash-section-title">My Profile</h1>
+        <p class="dash-section-sub">Adjust your stored metrics below. Active cuts will update instantly upon saving.</p>
+      </div>
+      <div class="client-meta-badge">Profile: ${profileData.email || 'Bespoke Client'}</div>
+    </div>
+    <div class="dashboard-card-pane dash-section-body">
+      <h3 class="card-pane-title">Archived Blueprint Proportions</h3>
+      <form id="dashboard-blueprint-form" class="blueprint-inline-form">
+        <div class="blueprint-input-grid">
+          <div class="metric-input-field">
+            <label for="dash-neck">Neck (cm)</label>
+            <input type="number" id="dash-neck" value="${blueprint.neck || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-chest">Chest (cm)</label>
+            <input type="number" id="dash-chest" value="${blueprint.chest || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-shoulder">Shoulder (cm)</label>
+            <input type="number" id="dash-shoulder" value="${blueprint.shoulder || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-sleeve">Sleeve (cm)</label>
+            <input type="number" id="dash-sleeve" value="${blueprint.sleeve || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-waist">Waist (cm)</label>
+            <input type="number" id="dash-waist" value="${blueprint.waist || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-hips">Hips (cm)</label>
+            <input type="number" id="dash-hips" value="${blueprint.hips || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-outseam">Outseam (cm)</label>
+            <input type="number" id="dash-outseam" value="${blueprint.outseam || ''}" step="0.1" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-inseam">Inseam (cm)</label>
+            <input type="number" id="dash-inseam" value="${blueprint.inseam || ''}" step="0.1" placeholder="--">
+          </div>
+        </div>
+        <button type="submit" class="btn-dashboard-save">Save Metric Shifts</button>
+      </form>
+    </div>
+  `;
+
+  const blueprintForm = document.getElementById("dashboard-blueprint-form");
+  blueprintForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const freshBlueprint = {
+      neck: parseFloat(document.getElementById("dash-neck").value) || null,
+      chest: parseFloat(document.getElementById("dash-chest").value) || null,
+      shoulder: parseFloat(document.getElementById("dash-shoulder").value) || null,
+      sleeve: parseFloat(document.getElementById("dash-sleeve").value) || null,
+      waist: parseFloat(document.getElementById("dash-waist").value) || null,
+      hips: parseFloat(document.getElementById("dash-hips").value) || null,
+      outseam: parseFloat(document.getElementById("dash-outseam").value) || null,
+      inseam: parseFloat(document.getElementById("dash-inseam").value) || null,
+    };
+
+    const ValidationBounds = { min: 30, max: 200 };
+    let validationError = null;
+
+    for (const [key, val] of Object.entries(freshBlueprint)) {
+      if (val !== null && (val < ValidationBounds.min || val > ValidationBounds.max)) {
+        validationError = `The entry for ${key} must sit between valid dimensions (${ValidationBounds.min}cm - ${ValidationBounds.max}cm).`;
+        break;
+      }
+    }
+
+    if (validationError) {
+      showAtelierNotification(validationError, "error");
+      return;
+    }
+
+    try {
+      await updateDoc(userDocRef, {
+        measurementBlueprint: {
+          ...freshBlueprint,
+          lastUpdated: serverTimestamp()
+        }
+      });
+      showAtelierNotification("Anatomical configuration updated securely inside your ledger.");
+    } catch (err) {
+      console.error("Failed to post blueprint shift edits to Firestore:", err);
+      showAtelierNotification("Database sync failed. Please check network protocols.", "error");
+    }
+  });
 }
 
 /**
@@ -463,290 +672,229 @@ function mountTailorShopTerminal() {
   const mainContent = document.getElementById("main-content");
   if (!mainContent) return;
 
-  mainContent.innerHTML = `
-    <div class="admin-wrapper">
-      <div class="admin-banner-row">
-        <div>
-          <h1 class="admin-panel-title">Tailor Shop Operations Terminal</h1>
-          <p class="admin-panel-sub">Live structural command center for matching active blueprints to production lines.</p>
-        </div>
-      </div>
+  const sections = [
+    { id: "overview", label: "Overview", icon: overviewIconSvg() },
+    { id: "bespoke", label: "Bespoke Orders", icon: rulerIconSvg() },
+    { id: "rtw", label: "Ready to Wear", icon: hangerIconSvg(), badgeId: "sidebar-badge-rtw" },
+    { id: "inventory", label: "Inventory", icon: layersIconSvg() },
+  ];
 
-      <!-- ═══════════════════════════════════════════════
-           READY-TO-WEAR BOUTIQUE ORDERS — MODAL LAUNCH CARD
-           Clicking opens .admin-glass-modal-backdrop (built by
-           openBoutiqueOrdersModal below) rather than swapping the ledger
-           view inline. The badge reflects the live RTW order count that
-           mountFinancialSummaryMatrix() already computes on every snapshot.
-           ═══════════════════════════════════════════════ -->
-      <div class="admin-summary-grid" style="display: flex; gap: 1rem; margin-bottom: 1.75rem;">
-        <button
-          type="button"
-          id="rtw-toggle-card"
-          class="admin-summary-card rtw-summary-card"
-        >
-          <span class="rtw-summary-card-icon" aria-hidden="true">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-              <path d="M3 6h18"></path>
-              <path d="M16 10a4 4 0 0 1-8 0"></path>
-            </svg>
-          </span>
-          <span id="rtw-toggle-badge" class="rtw-toggle-badge" style="display: none;">0</span>
-          <span class="rtw-summary-card-body">
-            <span class="rtw-summary-card-eyebrow">Boutique Orders</span>
-            <span class="rtw-summary-card-title">Ready-To-Wear Boutique Orders</span>
-            <span class="rtw-summary-card-hint">Tap to view incoming retail orders</span>
-          </span>
-          <span class="rtw-summary-card-arrow" aria-hidden="true">&#8594;</span>
-        </button>
-      </div>
+  mainContent.innerHTML = buildDashboardSidebarShell(sections);
+  wireDashboardSidebar("overview", (sectionId) => mountAdminSection(sectionId));
+  mountAdminSection("overview");
 
-      <!-- ═══════════════════════════════════════════════
-           PHASE 3: INVENTORY MATRIX MODULE
-           ═══════════════════════════════════════════════ -->
-      <div class="inventory-matrix-panel">
-        <div class="inventory-panel-header">
-          <div>
-            <h2 class="inventory-panel-title">Collection Inventory Matrix</h2>
-            <p class="inventory-panel-sub">Provision garment collections with size-specific pricing. All changes stream live to the public Lookbook.</p>
+  // Real-time client messages — floating glass launcher, multi-conversation
+  // inbox, persists across every section switch.
+  initAdminChat();
+}
+
+/** Routes a sidebar click to the right admin section-mount function, closing any listener the previous section had open first. */
+function mountAdminSection(sectionId) {
+  const pane = document.getElementById("dash-content-pane");
+  if (!pane) return;
+
+  teardownAllSectionListeners();
+
+  if (sectionId === "bespoke") {
+    mountAdminBespokeSection(pane);
+  } else if (sectionId === "rtw") {
+    mountAdminRtwSection(pane);
+  } else if (sectionId === "inventory") {
+    mountAdminInventorySection(pane);
+  } else {
+    mountAdminOverviewSection(pane);
+  }
+}
+
+/** Overview — the financial summary matrix, reusing mountFinancialSummaryMatrix() completely unchanged since the metric node IDs it targets are identical here. */
+function mountAdminOverviewSection(pane) {
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Tailor Shop Operations</p>
+        <h1 class="dash-section-title">Overview</h1>
+        <p class="dash-section-sub">Live structural command center for matching active blueprints to production lines.</p>
+      </div>
+    </div>
+
+    <div class="financial-matrix-hub" style="
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin-bottom: 2.25rem;
+      border: 1px solid rgba(197,168,128,0.18);
+      border-radius: 3px;
+      overflow: hidden;
+      background: rgba(197,168,128,0.18);
+    ">
+      <div class="fin-metric-block" style="background: var(--color-primary); padding: 1.4rem 1.6rem; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 0; right: 0; width: 3px; height: 100%; background: var(--color-accent); opacity: 0.65;"></div>
+        <p style="margin: 0 0 0.55rem 0; font-family: var(--font-body); font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-accent); opacity: 0.9;">Gross Studio Revenue</p>
+        <p id="fin-metric-revenue" style="margin: 0 0 0.3rem 0; font-family: var(--font-heading); font-size: 2.1rem; font-weight: 500; color: #ffffff; letter-spacing: -0.01em; line-height: 1; transition: color 0.4s ease;">—</p>
+        <p style="margin: 0; font-family: var(--font-body); font-size: 0.68rem; color: rgba(255,255,255,0.35); letter-spacing: 0.05em;">Cumulative across all order documents</p>
+      </div>
+      <div class="fin-metric-block" style="background: var(--color-primary); padding: 1.4rem 1.6rem; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 0; right: 0; width: 3px; height: 100%; background: var(--color-accent); opacity: 0.65;"></div>
+        <p style="margin: 0 0 0.55rem 0; font-family: var(--font-body); font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-accent); opacity: 0.9;">Active Bespoke Commissions</p>
+        <p id="fin-metric-bespoke" style="margin: 0 0 0.3rem 0; font-family: var(--font-heading); font-size: 2.1rem; font-weight: 500; color: #ffffff; letter-spacing: -0.01em; line-height: 1; transition: color 0.4s ease;">—</p>
+        <p style="margin: 0; font-family: var(--font-body); font-size: 0.68rem; color: rgba(255,255,255,0.35); letter-spacing: 0.05em;">Orders where type &#8800; Ready-To-Wear</p>
+      </div>
+      <div class="fin-metric-block" style="background: var(--color-primary); padding: 1.4rem 1.6rem; position: relative; overflow: hidden;">
+        <div style="position: absolute; top: 0; right: 0; width: 3px; height: 100%; background: var(--color-accent); opacity: 0.65;"></div>
+        <p style="margin: 0 0 0.55rem 0; font-family: var(--font-body); font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--color-accent); opacity: 0.9;">Boutique Units Dispatched</p>
+        <p id="fin-metric-rtw" style="margin: 0 0 0.3rem 0; font-family: var(--font-heading); font-size: 2.1rem; font-weight: 500; color: #ffffff; letter-spacing: -0.01em; line-height: 1; transition: color 0.4s ease;">—</p>
+        <p style="margin: 0; font-family: var(--font-body); font-size: 0.68rem; color: rgba(255,255,255,0.35); letter-spacing: 0.05em;">Orders where type = Ready-To-Wear</p>
+      </div>
+    </div>
+  `;
+
+  mountFinancialSummaryMatrix();
+}
+
+/** Bespoke Orders — the master commission ledger. mountOrdersStream("bespoke") is unchanged internally; it targets #admin-orders-stream, which this section provides. */
+function mountAdminBespokeSection(pane) {
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Tailor Shop Operations</p>
+        <h1 class="dash-section-title">Bespoke Orders</h1>
+        <p class="dash-section-sub">All client bespoke submissions streaming live from the production database.</p>
+      </div>
+    </div>
+    <div id="admin-orders-stream" class="admin-stream-container">
+      <p class="loading-text">Subscribing to master order ledgers...</p>
+    </div>
+  `;
+
+  mountOrdersStream("bespoke");
+}
+
+/** Ready to Wear — previously a modal-only view; now a first-class section. mountReadyToWearOrdersStream() already accepts an arbitrary container element, so it needs no changes at all. */
+function mountAdminRtwSection(pane) {
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Tailor Shop Operations</p>
+        <h1 class="dash-section-title">Ready to Wear</h1>
+        <p class="dash-section-sub">Incoming retail orders placed against stocked Lookbook inventory — shipping details and dispatch messaging.</p>
+      </div>
+    </div>
+    <div id="admin-rtw-stream" class="admin-stream-container">
+      <p class="loading-text">Subscribing to boutique order ledgers...</p>
+    </div>
+  `;
+
+  mountReadyToWearOrdersStream(document.getElementById("admin-rtw-stream"));
+}
+
+/** Inventory — the Collection Inventory Matrix, unchanged from before, just relocated into its own section instead of always sitting on the page. */
+function mountAdminInventorySection(pane) {
+  pane.innerHTML = `
+    <div class="dash-section-header">
+      <div>
+        <p class="dash-section-eyebrow">Tailor Shop Operations</p>
+        <h1 class="dash-section-title">Inventory</h1>
+        <p class="dash-section-sub">Provision garment collections with size-specific pricing. All changes stream live to the public Lookbook.</p>
+      </div>
+      <button id="btn-toggle-add-collection" class="btn-inventory-add">
+        <span>+ Add New Collection</span>
+      </button>
+    </div>
+
+    <!-- New Collection Creation Form (hidden by default) -->
+    <div id="add-collection-drawer" class="inventory-add-drawer" style="display: none;">
+      <h3 class="drawer-form-title">New Collection Configuration</h3>
+      <form id="add-collection-form" class="inventory-creation-form">
+
+        <div class="inv-form-row inv-form-row--2col">
+          <div class="inv-form-field">
+            <label for="inv-collection-name">Collection Name</label>
+            <input type="text" id="inv-collection-name" placeholder="e.g. Ivory Brocade Kaftan" required>
           </div>
-          <button id="btn-toggle-add-collection" class="btn-inventory-add">
-            <span>+ Add New Collection</span>
-          </button>
+          <div class="inv-form-field">
+            <label for="inv-silhouette-slug">Silhouette Slug</label>
+            <select id="inv-silhouette-slug" required>
+              <option value="" disabled selected>Select Garment Silhouette</option>
+              <option value="signature-kaftan">Signature Custom Kaftan</option>
+              <option value="bespoke-two-piece">Premium Two-Piece Suit</option>
+              <option value="luxury-agbada">Royal Agbada Masterpiece</option>
+              <option value="printed-apparel">Printed Contemporary Shirt</option>
+            </select>
+          </div>
         </div>
 
-        <!-- New Collection Creation Form (hidden by default) -->
-        <div id="add-collection-drawer" class="inventory-add-drawer" style="display: none;">
-          <h3 class="drawer-form-title">New Collection Configuration</h3>
-          <form id="add-collection-form" class="inventory-creation-form">
+        <div class="inv-form-field inv-form-field--full">
+          <label>Garment Image</label>
 
-            <div class="inv-form-row inv-form-row--2col">
-              <div class="inv-form-field">
-                <label for="inv-collection-name">Collection Name</label>
-                <input type="text" id="inv-collection-name" placeholder="e.g. Ivory Brocade Kaftan" required>
-              </div>
-              <div class="inv-form-field">
-                <label for="inv-silhouette-slug">Silhouette Slug</label>
-                <select id="inv-silhouette-slug" required>
-                  <option value="" disabled selected>Select Garment Silhouette</option>
-                  <option value="signature-kaftan">Signature Custom Kaftan</option>
-                  <option value="bespoke-two-piece">Premium Two-Piece Suit</option>
-                  <option value="luxury-agbada">Royal Agbada Masterpiece</option>
-                  <option value="printed-apparel">Printed Contemporary Shirt</option>
-                </select>
-              </div>
+          <div class="inv-image-source-toggle" role="tablist">
+            <button type="button" class="inv-image-source-btn is-active" data-source="upload" role="tab" aria-selected="true">Upload from Computer</button>
+            <button type="button" class="inv-image-source-btn" data-source="url" role="tab" aria-selected="false">Paste Image URL</button>
+          </div>
+
+          <div class="inv-image-source-panel" data-panel="upload">
+            <label for="inv-image-file" class="inv-file-drop-zone" id="inv-file-drop-zone">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              <span class="inv-file-drop-text" id="inv-file-drop-text">Click to choose an image, or drag one here</span>
+              <span class="inv-file-drop-hint">JPG, PNG, or WEBP — up to 5MB</span>
+              <input type="file" id="inv-image-file" accept="image/png,image/jpeg,image/webp" hidden>
+            </label>
+          </div>
+
+          <div class="inv-image-source-panel" data-panel="url" style="display: none;">
+            <input type="url" id="inv-image-url" placeholder="https://...image.jpg">
+          </div>
+
+          <div class="inv-image-preview-wrap" id="inv-image-preview-wrap" style="display: none;">
+            <img src="" alt="Garment preview" class="inv-image-preview" id="inv-image-preview">
+            <button type="button" class="inv-image-preview-clear" id="inv-image-preview-clear" aria-label="Remove selected image">&times;</button>
+          </div>
+        </div>
+
+        <div class="inv-form-field inv-form-field--full">
+          <label for="inv-subtitle">Garment Subtitle / Material Description</label>
+          <input type="text" id="inv-subtitle" placeholder="e.g. Polished Premium Polish Fabric">
+        </div>
+
+        <div class="inv-size-pricing-block">
+          <p class="inv-size-pricing-label">Size-Specific Pricing Matrix (GH₵)</p>
+          <div class="inv-size-price-grid">
+            <div class="inv-size-price-cell">
+              <label for="inv-price-S">S</label>
+              <input type="number" id="inv-price-S" min="0" step="50" placeholder="0">
             </div>
-
-            <div class="inv-form-field inv-form-field--full">
-              <label for="inv-image-url">Garment Image URL</label>
-              <input type="url" id="inv-image-url" placeholder="https://...image.jpg" required>
+            <div class="inv-size-price-cell">
+              <label for="inv-price-M">M</label>
+              <input type="number" id="inv-price-M" min="0" step="50" placeholder="0" required>
             </div>
-
-            <div class="inv-form-field inv-form-field--full">
-              <label for="inv-subtitle">Garment Subtitle / Material Description</label>
-              <input type="text" id="inv-subtitle" placeholder="e.g. Polished Premium Polish Fabric">
+            <div class="inv-size-price-cell">
+              <label for="inv-price-L">L</label>
+              <input type="number" id="inv-price-L" min="0" step="50" placeholder="0" required>
             </div>
-
-            <div class="inv-size-pricing-block">
-              <p class="inv-size-pricing-label">Size-Specific Pricing Matrix (GH₵)</p>
-              <div class="inv-size-price-grid">
-                <div class="inv-size-price-cell">
-                  <label for="inv-price-S">S</label>
-                  <input type="number" id="inv-price-S" min="0" step="50" placeholder="0">
-                </div>
-                <div class="inv-size-price-cell">
-                  <label for="inv-price-M">M</label>
-                  <input type="number" id="inv-price-M" min="0" step="50" placeholder="0" required>
-                </div>
-                <div class="inv-size-price-cell">
-                  <label for="inv-price-L">L</label>
-                  <input type="number" id="inv-price-L" min="0" step="50" placeholder="0" required>
-                </div>
-                <div class="inv-size-price-cell">
-                  <label for="inv-price-XL">XL</label>
-                  <input type="number" id="inv-price-XL" min="0" step="50" placeholder="0">
-                </div>
-                <div class="inv-size-price-cell">
-                  <label for="inv-price-XXL">XXL</label>
-                  <input type="number" id="inv-price-XXL" min="0" step="50" placeholder="0">
-                </div>
-              </div>
+            <div class="inv-size-price-cell">
+              <label for="inv-price-XL">XL</label>
+              <input type="number" id="inv-price-XL" min="0" step="50" placeholder="0">
             </div>
-
-            <div class="inv-form-actions">
-              <button type="submit" class="btn-inv-submit">Lock Collection to Registry</button>
-              <button type="button" id="btn-cancel-add-collection" class="btn-inv-cancel">Cancel</button>
+            <div class="inv-size-price-cell">
+              <label for="inv-price-XXL">XXL</label>
+              <input type="number" id="inv-price-XXL" min="0" step="50" placeholder="0">
             </div>
-          </form>
+          </div>
         </div>
 
-        <!-- Live Inventory Stream -->
-        <div id="admin-inventory-stream" class="inventory-stream-grid">
-          <p class="loading-text" style="padding: 3rem; text-align: center; color: #9a9a9a;">Subscribing to collection registries...</p>
+        <div class="inv-form-actions">
+          <button type="submit" class="btn-inv-submit">Lock Collection to Registry</button>
+          <button type="button" id="btn-cancel-add-collection" class="btn-inv-cancel">Cancel</button>
         </div>
-      </div>
+      </form>
+    </div>
 
-      <!-- ═══════════════════════════════════════════════
-           PHASE 5: ANALYTICS LEDGER HUB
-           Financial Summary Matrix — real-time metric blocks
-           Positioned directly above the order stream panels.
-           Values hydrated by mountFinancialSummaryMatrix()
-           which runs a full-collection onSnapshot over "orders".
-           ═══════════════════════════════════════════════ -->
-      <div class="financial-matrix-hub" style="
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 1px;
-        margin-bottom: 2.25rem;
-        border: 1px solid rgba(197,168,128,0.18);
-        border-radius: 3px;
-        overflow: hidden;
-        background: rgba(197,168,128,0.18);
-      ">
-
-        <!-- Metric Block 1: Gross Studio Revenue -->
-        <div class="fin-metric-block" style="
-          background: var(--color-primary);
-          padding: 1.4rem 1.6rem;
-          position: relative;
-          overflow: hidden;
-        ">
-          <div style="
-            position: absolute;
-            top: 0; right: 0;
-            width: 3px;
-            height: 100%;
-            background: var(--color-accent);
-            opacity: 0.65;
-          "></div>
-          <p style="
-            margin: 0 0 0.55rem 0;
-            font-family: var(--font-body);
-            font-size: 0.65rem;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: var(--color-accent);
-            opacity: 0.9;
-          ">Gross Studio Revenue</p>
-          <p id="fin-metric-revenue" style="
-            margin: 0 0 0.3rem 0;
-            font-family: var(--font-heading);
-            font-size: 2.1rem;
-            font-weight: 500;
-            color: #ffffff;
-            letter-spacing: -0.01em;
-            line-height: 1;
-            transition: color 0.4s ease;
-          ">—</p>
-          <p style="
-            margin: 0;
-            font-family: var(--font-body);
-            font-size: 0.68rem;
-            color: rgba(255,255,255,0.35);
-            letter-spacing: 0.05em;
-          ">Cumulative across all order documents</p>
-        </div>
-
-        <!-- Metric Block 2: Active Bespoke Commissions -->
-        <div class="fin-metric-block" style="
-          background: var(--color-primary);
-          padding: 1.4rem 1.6rem;
-          position: relative;
-          overflow: hidden;
-        ">
-          <div style="
-            position: absolute;
-            top: 0; right: 0;
-            width: 3px;
-            height: 100%;
-            background: var(--color-accent);
-            opacity: 0.65;
-          "></div>
-          <p style="
-            margin: 0 0 0.55rem 0;
-            font-family: var(--font-body);
-            font-size: 0.65rem;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: var(--color-accent);
-            opacity: 0.9;
-          ">Active Bespoke Commissions</p>
-          <p id="fin-metric-bespoke" style="
-            margin: 0 0 0.3rem 0;
-            font-family: var(--font-heading);
-            font-size: 2.1rem;
-            font-weight: 500;
-            color: #ffffff;
-            letter-spacing: -0.01em;
-            line-height: 1;
-            transition: color 0.4s ease;
-          ">—</p>
-          <p style="
-            margin: 0;
-            font-family: var(--font-body);
-            font-size: 0.68rem;
-            color: rgba(255,255,255,0.35);
-            letter-spacing: 0.05em;
-          ">Orders where type &#8800; Ready-To-Wear</p>
-        </div>
-
-        <!-- Metric Block 3: Boutique Units Dispatched -->
-        <div class="fin-metric-block" style="
-          background: var(--color-primary);
-          padding: 1.4rem 1.6rem;
-          position: relative;
-          overflow: hidden;
-        ">
-          <div style="
-            position: absolute;
-            top: 0; right: 0;
-            width: 3px;
-            height: 100%;
-            background: var(--color-accent);
-            opacity: 0.65;
-          "></div>
-          <p style="
-            margin: 0 0 0.55rem 0;
-            font-family: var(--font-body);
-            font-size: 0.65rem;
-            letter-spacing: 0.18em;
-            text-transform: uppercase;
-            color: var(--color-accent);
-            opacity: 0.9;
-          ">Boutique Units Dispatched</p>
-          <p id="fin-metric-rtw" style="
-            margin: 0 0 0.3rem 0;
-            font-family: var(--font-heading);
-            font-size: 2.1rem;
-            font-weight: 500;
-            color: #ffffff;
-            letter-spacing: -0.01em;
-            line-height: 1;
-            transition: color 0.4s ease;
-          ">—</p>
-          <p style="
-            margin: 0;
-            font-family: var(--font-body);
-            font-size: 0.68rem;
-            color: rgba(255,255,255,0.35);
-            letter-spacing: 0.05em;
-          ">Orders where type = Ready-To-Wear</p>
-        </div>
-
-      </div>
-
-      <!-- ═══════════════════════════════════════════════
-           EXISTING: MASTER ORDER LEDGER QUEUE
-           ═══════════════════════════════════════════════ -->
-      <div class="admin-orders-section">
-        <h2 class="ledger-section-title" style="margin-bottom: 0.5rem;">Commission Order Ledger</h2>
-        <p class="ledger-section-sub" style="margin-bottom: 2rem;">All client bespoke submissions streaming live from the production database.</p>
-        <div id="admin-orders-stream" class="admin-stream-container">
-          <p class="loading-text">Subscribing to master order ledgers...</p>
-        </div>
-      </div>
-
+    <!-- Live Inventory Stream -->
+    <div id="admin-inventory-stream" class="inventory-stream-grid">
+      <p class="loading-text" style="padding: 3rem; text-align: center; color: #9a9a9a;">Subscribing to collection registries...</p>
     </div>
   `;
 
@@ -765,6 +913,121 @@ function mountTailorShopTerminal() {
     addDrawer.style.display = "none";
     toggleBtn.querySelector("span").textContent = "+ Add New Collection";
     document.getElementById("add-collection-form").reset();
+    resetImagePicker();
+  });
+
+  // ── GARMENT IMAGE PICKER — upload from computer, or paste a URL ──
+  let selectedImageFile = null;
+  let imageSourceMode = "upload";
+
+  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB — matches the Storage rules limit
+
+  const sourceToggleBtns = document.querySelectorAll(".inv-image-source-btn");
+  const sourcePanels     = document.querySelectorAll(".inv-image-source-panel");
+  const fileInput        = document.getElementById("inv-image-file");
+  const dropZone         = document.getElementById("inv-file-drop-zone");
+  const dropZoneText     = document.getElementById("inv-file-drop-text");
+  const urlInput         = document.getElementById("inv-image-url");
+  const previewWrap      = document.getElementById("inv-image-preview-wrap");
+  const previewImg       = document.getElementById("inv-image-preview");
+  const previewClearBtn  = document.getElementById("inv-image-preview-clear");
+
+  function resetImagePicker() {
+    selectedImageFile = null;
+    imageSourceMode = "upload";
+    fileInput.value = "";
+    urlInput.value = "";
+    dropZoneText.textContent = "Click to choose an image, or drag one here";
+    previewWrap.style.display = "none";
+    previewImg.src = "";
+    sourceToggleBtns.forEach((b) => {
+      b.classList.toggle("is-active", b.dataset.source === "upload");
+      b.setAttribute("aria-selected", b.dataset.source === "upload" ? "true" : "false");
+    });
+    sourcePanels.forEach((p) => { p.style.display = p.dataset.panel === "upload" ? "" : "none"; });
+  }
+
+  function updateImagePreview() {
+    if (imageSourceMode === "upload" && selectedImageFile) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        previewImg.src = ev.target.result;
+        previewWrap.style.display = "flex";
+      };
+      reader.readAsDataURL(selectedImageFile);
+    } else if (imageSourceMode === "url" && urlInput.value.trim()) {
+      previewImg.src = urlInput.value.trim();
+      previewWrap.style.display = "flex";
+    } else {
+      previewWrap.style.display = "none";
+      previewImg.src = "";
+    }
+  }
+
+  function applySelectedFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showAtelierNotification("Please choose an image file (JPG, PNG, or WEBP).", "error");
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      showAtelierNotification("That image is over 5MB — please choose a smaller file.", "error");
+      return;
+    }
+    selectedImageFile = file;
+    dropZoneText.textContent = file.name;
+    updateImagePreview();
+  }
+
+  sourceToggleBtns.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      imageSourceMode = btn.dataset.source;
+      sourceToggleBtns.forEach((b) => {
+        b.classList.toggle("is-active", b === btn);
+        b.setAttribute("aria-selected", b === btn ? "true" : "false");
+      });
+      sourcePanels.forEach((p) => { p.style.display = p.dataset.panel === imageSourceMode ? "" : "none"; });
+
+      if (imageSourceMode === "upload") {
+        urlInput.value = "";
+      } else {
+        selectedImageFile = null;
+        fileInput.value = "";
+        dropZoneText.textContent = "Click to choose an image, or drag one here";
+      }
+      updateImagePreview();
+    });
+  });
+
+  fileInput.addEventListener("change", (e) => applySelectedFile(e.target.files[0]));
+
+  ["dragenter", "dragover"].forEach((evtName) => {
+    dropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add("is-drag-active");
+    });
+  });
+  ["dragleave", "drop"].forEach((evtName) => {
+    dropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove("is-drag-active");
+    });
+  });
+  dropZone.addEventListener("drop", (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) applySelectedFile(file);
+  });
+
+  urlInput.addEventListener("input", () => updateImagePreview());
+
+  previewClearBtn.addEventListener("click", () => {
+    selectedImageFile = null;
+    fileInput.value = "";
+    urlInput.value = "";
+    dropZoneText.textContent = "Click to choose an image, or drag one here";
+    updateImagePreview();
   });
 
   // ── INVENTORY CREATION SUBMIT ──
@@ -774,7 +1037,7 @@ function mountTailorShopTerminal() {
 
     const collectionName = document.getElementById("inv-collection-name").value.trim();
     const silhouetteSlug = document.getElementById("inv-silhouette-slug").value;
-    const imageUrl = document.getElementById("inv-image-url").value.trim();
+    const pastedImageUrl = urlInput.value.trim();
     const subtitle = document.getElementById("inv-subtitle").value.trim();
 
     const priceS   = parseFloat(document.getElementById("inv-price-S").value)   || 0;
@@ -783,8 +1046,16 @@ function mountTailorShopTerminal() {
     const priceXL  = parseFloat(document.getElementById("inv-price-XL").value)  || 0;
     const priceXXL = parseFloat(document.getElementById("inv-price-XXL").value) || 0;
 
-    if (!collectionName || !silhouetteSlug || !imageUrl) {
+    if (!collectionName || !silhouetteSlug) {
       showAtelierNotification("Please complete all required collection fields.", "error");
+      return;
+    }
+    if (imageSourceMode === "upload" && !selectedImageFile) {
+      showAtelierNotification("Please choose an image to upload, or switch to Paste Image URL.", "error");
+      return;
+    }
+    if (imageSourceMode === "url" && !pastedImageUrl) {
+      showAtelierNotification("Please paste an image URL, or switch to Upload from Computer.", "error");
       return;
     }
     if (priceM <= 0 || priceL <= 0) {
@@ -794,9 +1065,23 @@ function mountTailorShopTerminal() {
 
     const submitBtn = addCollectionForm.querySelector("button[type='submit']");
     submitBtn.disabled = true;
-    submitBtn.textContent = "Registering Collection...";
 
     try {
+      let imageUrl;
+
+      if (imageSourceMode === "upload" && selectedImageFile) {
+        submitBtn.textContent = "Uploading image...";
+        const extension = selectedImageFile.name.split(".").pop();
+        const storagePath = `collection-images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+        const imageStorageRef = storageRef(storage, storagePath);
+        await uploadBytes(imageStorageRef, selectedImageFile);
+        imageUrl = await getDownloadURL(imageStorageRef);
+      } else {
+        imageUrl = pastedImageUrl;
+      }
+
+      submitBtn.textContent = "Registering Collection...";
+
       const collectionPayload = {
         collectionName,
         silhouetteSlug,
@@ -817,132 +1102,25 @@ function mountTailorShopTerminal() {
 
       showAtelierNotification(`Collection "${collectionName}" locked into the live registry.`);
       addCollectionForm.reset();
+      resetImagePicker();
       addDrawer.style.display = "none";
       toggleBtn.querySelector("span").textContent = "+ Add New Collection";
     } catch (err) {
       console.error("Collection write failure:", err);
-      showAtelierNotification("Registry write rejected. Check permissions.", "error");
+      const isStorageError = err?.code?.startsWith?.("storage/");
+      showAtelierNotification(
+        isStorageError
+          ? "Image upload rejected. Check your connection and try again."
+          : "Registry write rejected. Check permissions.",
+        "error"
+      );
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = "Lock Collection to Registry";
     }
   });
 
-  // ── LIVE INVENTORY STREAM (onSnapshot → collections) ──
   mountInventoryStream();
-
-  // ── PHASE 5: ANALYTICS LEDGER HUB — Financial Summary Matrix ──
-  // Subscribes to the full "orders" collection in real time. Derives
-  // grossRevenue (sum of finalPrice), bespokeCount (orderType != RTW),
-  // and rtwCount (orderType == RTW) on every snapshot and pushes live
-  // values into the three metric DOM nodes injected in the HTML above.
-  mountFinancialSummaryMatrix();
-
-  // ── LIVE ORDERS STREAM (defaults to Bespoke view) ──
-  mountOrdersStream("bespoke");
-
-  // ── READY-TO-WEAR BOUTIQUE ORDERS — MODAL LAUNCH WIRING ──
-  // The master ledger below now permanently shows the Bespoke Commission
-  // Ledger; this card no longer swaps that view in place. Clicking it opens
-  // the dedicated glass, scrollable Boutique Orders modal instead.
-  const rtwToggleCard = document.getElementById("rtw-toggle-card");
-  if (rtwToggleCard) {
-    rtwToggleCard.addEventListener("click", () => {
-      openBoutiqueOrdersModal();
-    });
-  }
-
-  // Real-time client messages — floating glass launcher, multi-conversation inbox
-  initAdminChat();
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// READY-TO-WEAR BOUTIQUE ORDERS MODAL
-//
-// A frosted-glass, scrollable overlay that streams live Ready-To-Wear orders
-// (placed against actual stocked inventory in the public Lookbook, as
-// opposed to bespoke measurement commissions). Built once on first open and
-// reused on subsequent opens; the Firestore listener itself is torn down
-// every time the modal closes so it isn't billing reads while hidden.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** Builds and appends the modal shell to <body> if it isn't already there. */
-function ensureBoutiqueOrdersModalShell() {
-  if (document.getElementById("boutique-orders-modal-backdrop")) return;
-
-  const shell = document.createElement("div");
-  shell.innerHTML = `
-    <div
-      class="admin-glass-modal-backdrop"
-      id="boutique-orders-modal-backdrop"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Ready-To-Wear Boutique Orders"
-      aria-hidden="true"
-    >
-      <div class="admin-glass-modal">
-        <div class="admin-glass-modal-header">
-          <div>
-            <p class="admin-glass-modal-eyebrow">Ready-To-Wear</p>
-            <h2 class="admin-glass-modal-title">Boutique Orders</h2>
-            <p class="admin-glass-modal-sub">Incoming retail orders placed against stocked Lookbook inventory — shipping details and dispatch messaging.</p>
-          </div>
-          <button class="admin-glass-modal-close" id="boutique-orders-modal-close" aria-label="Close boutique orders">&times;</button>
-        </div>
-        <div class="admin-glass-modal-body" id="boutique-orders-modal-stream">
-          <p class="loading-text">Subscribing to boutique order ledgers...</p>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(shell.firstElementChild);
-
-  const backdrop = document.getElementById("boutique-orders-modal-backdrop");
-  const closeBtn = document.getElementById("boutique-orders-modal-close");
-
-  closeBtn.addEventListener("click", closeBoutiqueOrdersModal);
-
-  // Click the dimmed backdrop (not the glass card itself) to dismiss
-  backdrop.addEventListener("click", (e) => {
-    if (e.target === backdrop) closeBoutiqueOrdersModal();
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && backdrop.classList.contains("is-active")) {
-      closeBoutiqueOrdersModal();
-    }
-  });
-}
-
-/** Opens the modal and (re)subscribes the live RTW orders stream into it. */
-function openBoutiqueOrdersModal() {
-  ensureBoutiqueOrdersModalShell();
-
-  const backdrop = document.getElementById("boutique-orders-modal-backdrop");
-  const streamEl = document.getElementById("boutique-orders-modal-stream");
-  if (!backdrop || !streamEl) return;
-
-  backdrop.classList.add("is-active");
-  backdrop.setAttribute("aria-hidden", "false");
-  document.body.classList.add("atelier-drawer-open"); // reuses the existing scroll-lock utility
-
-  streamEl.innerHTML = `<p class="loading-text">Subscribing to boutique order ledgers...</p>`;
-  mountReadyToWearOrdersStream(streamEl);
-}
-
-/** Closes the modal and tears down its Firestore listener. */
-function closeBoutiqueOrdersModal() {
-  const backdrop = document.getElementById("boutique-orders-modal-backdrop");
-  if (backdrop) {
-    backdrop.classList.remove("is-active");
-    backdrop.setAttribute("aria-hidden", "true");
-  }
-  document.body.classList.remove("atelier-drawer-open");
-
-  if (window.activeRtwModalUnsubscribe) {
-    window.activeRtwModalUnsubscribe();
-    window.activeRtwModalUnsubscribe = null;
-  }
 }
 
 
@@ -1037,9 +1215,10 @@ function mountFinancialSummaryMatrix() {
     flashUpdate(bespokeEl, bespokeCount.toLocaleString());
     flashUpdate(rtwEl,     rtwCount.toLocaleString());
 
-    // Keep the Boutique Orders launch card's badge in sync with the same
-    // count — no separate listener needed, this snapshot already has it.
-    const badgeEl = document.getElementById("rtw-toggle-badge");
+    // Keep the "Ready to Wear" sidebar nav item's badge in sync with the
+    // same count — no separate listener needed, this snapshot already has
+    // it. Only present when the admin dashboard's sidebar is mounted.
+    const badgeEl = document.getElementById("sidebar-badge-rtw");
     if (badgeEl) {
       if (rtwCount > 0) {
         badgeEl.textContent = rtwCount > 99 ? "99+" : String(rtwCount);
@@ -1678,6 +1857,44 @@ function personIconSvg() {
 
 function calendarIconSvg() {
   return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>`;
+}
+
+// ── SIDEBAR NAV ICONS ──
+// Standard, plain stroke icons matching the Lucide-style set already used
+// throughout the app (mailIconSvg, phoneIconSvg, etc.) — no filled shapes,
+// no decorative flourish, sized by CSS (.dash-nav-icon svg) rather than
+// their own attributes so every nav icon renders at one consistent size
+// regardless of which helper it came from.
+function overviewIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>`;
+}
+
+function packageIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73Z"></path><path d="M3.3 7 12 12l8.7-5"></path><path d="M12 22V12"></path></svg>`;
+}
+
+function rulerIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.3 8.7 15.3 2.7a1 1 0 0 0-1.4 0L2.7 13.9a1 1 0 0 0 0 1.4l6 6a1 1 0 0 0 1.4 0L21.3 10.1a1 1 0 0 0 0-1.4Z"></path><path d="m7.5 10.5 2 2"></path><path d="m10.5 7.5 2 2"></path><path d="m13.5 4.5 2 2"></path><path d="m4.5 13.5 2 2"></path></svg>`;
+}
+
+function hangerIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path><path d="M3 6h18"></path><path d="M16 10a4 4 0 0 1-8 0"></path></svg>`;
+}
+
+function bellIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>`;
+}
+
+function layersIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"></path><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"></path><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"></path></svg>`;
+}
+
+function chevronIconSvg() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>`;
+}
+
+function signOutIconSvg() {
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>`;
 }
 
 /**
