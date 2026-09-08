@@ -2646,7 +2646,7 @@
 }
 
 .btn-inventory-add {
-  background: transparent;
+  background: var(--color-primary);
   border: 1px solid var(--color-accent);
   color: var(--color-accent);
   font-family: var(--font-body);
@@ -2658,6 +2658,7 @@
   cursor: pointer;
   transition: var(--transition-luxury);
   white-space: nowrap;
+  margin-top: 10px;
 }
 
 .btn-inventory-add:hover {
