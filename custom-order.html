@@ -104,30 +104,51 @@
                     <legend class="tier-heading">01. Upper Body Parameters</legend>
 
                     <div class="input-cell">
-                        <label for="measure-neck">Neck Circumference ($\text{cm}$)</label>
-                        <input type="number" id="measure-neck" name="neck" min="30" max="60" placeholder="e.g. 42"
+                        <label for="measure-neck">Neck ($\text{cm}$)</label>
+                        <input type="number" id="measure-neck" name="neck" min="30" max="60" step="0.1" placeholder="e.g. 42"
                             required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
                     <div class="input-cell">
-                        <label for="measure-chest">Chest Width ($\text{cm}$)</label>
-                        <input type="number" id="measure-chest" name="chest" min="80" max="150" placeholder="e.g. 104"
+                        <label for="measure-chest">Chest ($\text{cm}$)</label>
+                        <input type="number" id="measure-chest" name="chest" min="80" max="150" step="0.1" placeholder="e.g. 104"
                             required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
                     <div class="input-cell">
-                        <label for="measure-shoulder">Shoulder to Shoulder ($\text{cm}$)</label>
-                        <input type="number" id="measure-shoulder" name="shoulder" min="35" max="65"
-                            placeholder="e.g. 48" required>
+                        <label for="measure-across-back-shoulder">Across Back / Shoulder ($\text{cm}$)</label>
+                        <input type="number" id="measure-across-back-shoulder" name="acrossBackShoulder" min="35" max="65"
+                            step="0.1" placeholder="e.g. 48" required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
                     <div class="input-cell">
-                        <label for="measure-sleeve">Sleeve Reach ($\text{cm}$)</label>
-                        <input type="number" id="measure-sleeve" name="sleeve" min="50" max="80" placeholder="e.g. 64"
-                            required>
+                        <label for="measure-sleeve-length">Sleeve Length ($\text{cm}$)</label>
+                        <input type="number" id="measure-sleeve-length" name="sleeveLength" min="50" max="80" step="0.1"
+                            placeholder="e.g. 64" required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-top-length">Top Length ($\text{cm}$)</label>
+                        <input type="number" id="measure-top-length" name="topLength" min="50" max="100" step="0.1"
+                            placeholder="e.g. 74" required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-around-arm">Around Arm ($\text{cm}$)</label>
+                        <input type="number" id="measure-around-arm" name="aroundArm" min="20" max="50" step="0.1"
+                            placeholder="e.g. 32" required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-wrist">Wrist ($\text{cm}$)</label>
+                        <input type="number" id="measure-wrist" name="wrist" min="12" max="25" step="0.1"
+                            placeholder="e.g. 17" required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
                 </fieldset>
@@ -136,36 +157,61 @@
                     <legend class="tier-heading">02. Lower Body Parameters</legend>
 
                     <div class="input-cell">
-                        <label for="measure-waist">True Waist ($\text{cm}$)</label>
-                        <input type="number" id="measure-waist" name="waist" min="60" max="140" placeholder="e.g. 88"
+                        <label for="measure-waist">Waist ($\text{cm}$)</label>
+                        <input type="number" id="measure-waist" name="waist" min="60" max="140" step="0.1" placeholder="e.g. 88"
                             required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
                     <div class="input-cell">
-                        <label for="measure-hips">Hip Perimeter ($\text{cm}$)</label>
-                        <input type="number" id="measure-hips" name="hips" min="80" max="160" placeholder="e.g. 102"
-                            required>
-                        <span class="error-indicator" aria-live="polite"></span>
-                    </div>
-
-                    <div class="input-cell">
-                        <label for="measure-outseam">Outseam Drop ($\text{cm}$)</label>
-                        <input type="number" id="measure-outseam" name="outseam" min="80" max="130"
+                        <label for="measure-length">Length ($\text{cm}$)</label>
+                        <input type="number" id="measure-length" name="length" min="80" max="130" step="0.1"
                             placeholder="e.g. 106" required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
                     <div class="input-cell">
-                        <label for="measure-inseam">Inseam Profile ($\text{cm}$)</label>
-                        <input type="number" id="measure-inseam" name="inseam" min="60" max="100" placeholder="e.g. 78"
+                        <label for="measure-thigh">Thigh ($\text{cm}$)</label>
+                        <input type="number" id="measure-thigh" name="thigh" min="35" max="90" step="0.1" placeholder="e.g. 58"
                             required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-knee">Knee ($\text{cm}$)</label>
+                        <input type="number" id="measure-knee" name="knee" min="25" max="60" step="0.1" placeholder="e.g. 38"
+                            required>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell">
+                        <label for="measure-bar-ankle">Bar/Ankle ($\text{cm}$)</label>
+                        <input type="number" id="measure-bar-ankle" name="barAnkle" min="15" max="40" step="0.1"
+                            placeholder="e.g. 24" required>
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
                 </fieldset>
 
                 <fieldset class="form-tier">
                     <legend class="tier-heading">03. Atelier Specification</legend>
+
+                    <div class="input-cell">
+                        <label for="order-atelier">Atelier</label>
+                        <select id="order-atelier" name="atelier" required>
+                            <option value="" disabled selected>Select Atelier</option>
+                            <option value="accra-flagship">Suit Boss Flagship Atelier &mdash; Accra</option>
+                            <option value="kumasi-studio">Suit Boss Kumasi Studio</option>
+                            <option value="takoradi-workshop">Suit Boss Takoradi Workshop</option>
+                            <option value="other">Other / Custom Atelier</option>
+                        </select>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell" id="order-atelier-custom-cell" style="display: none;">
+                        <label for="order-atelier-custom">Custom Atelier Name</label>
+                        <input type="text" id="order-atelier-custom" name="customAtelier" placeholder="Enter atelier name">
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
 
                     <div class="input-cell">
                         <label for="order-style">Apparel Silhouette</label>
@@ -175,7 +221,14 @@
                             <option value="bespoke-two-piece">Premium Two-Piece Suit</option>
                             <option value="luxury-agbada">Royal Agbada Masterpiece</option>
                             <option value="printed-apparel">Printed Contemporary Shirt</option>
+                            <option value="other">Other / Custom Silhouette</option>
                         </select>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell" id="order-style-custom-cell" style="display: none;">
+                        <label for="order-style-custom">Custom Silhouette Name</label>
+                        <input type="text" id="order-style-custom" name="customStyle" placeholder="Describe your desired silhouette">
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
@@ -187,7 +240,14 @@
                             <option value="polished-linen">Polished Tropical Linen</option>
                             <option value="luxury-brocade">Hand-Woven Luxury Brocade</option>
                             <option value="deluxe-cotton">High-Thread Deluxe Cotton</option>
+                            <option value="other">Other / Custom Fabric</option>
                         </select>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
+                    <div class="input-cell" id="order-fabric-custom-cell" style="display: none;">
+                        <label for="order-fabric-custom">Custom Fabric Name</label>
+                        <input type="text" id="order-fabric-custom" name="customFabric" placeholder="Describe your desired textile">
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
                 </fieldset>

@@ -349,14 +349,22 @@ async function provisionUserFirestoreRecord(uid, email, method) {
         accountCreatedTimestamp: serverTimestamp(),
         systemAccessLevel: "client",
         measurementBlueprint: {
-            neck:        null,
-            chest:       null,
-            shoulder:    null,
-            sleeve:      null,
-            waist:       null,
-            hips:        null,
-            outseam:     null,
-            inseam:      null,
+            upperBody: {
+                neck:               null,
+                chest:              null,
+                acrossBackShoulder: null,
+                sleeveLength:       null,
+                topLength:          null,
+                aroundArm:          null,
+                wrist:              null,
+            },
+            lowerBody: {
+                waist:    null,
+                length:   null,
+                thigh:    null,
+                knee:     null,
+                barAnkle: null,
+            },
             lastUpdated: null
         },
         activeCommissionsCount: 0

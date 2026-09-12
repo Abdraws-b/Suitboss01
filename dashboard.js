@@ -228,11 +228,11 @@ function buildClientOrderCardHtml(orderDoc) {
 
   const orderTitle = isRTW
     ? (orderData.collectionName || "Ready-To-Wear Piece")
-    : formatGarmentName(orderData.configuration?.silhouette);
+    : resolveSilhouetteLabel(orderData.configuration);
 
   const orderSubline = isRTW
     ? (orderData.selectedSize ? `Size: ${orderData.selectedSize}` : "Ready-To-Wear")
-    : `Material Layer: ${formatTextileName(orderData.configuration?.textileProfile)}`;
+    : `Material Layer: ${resolveTextileLabel(orderData.configuration)}`;
 
   let deliveryNotesHtml = "";
   if (typeof orderData.deliveryNotes === "string" && orderData.deliveryNotes.trim().length > 0) {
@@ -256,8 +256,8 @@ function buildClientOrderCardHtml(orderDoc) {
         ${thumbnailHtml}
         <div class="client-order-meta">
           <span class="badge-order-id">SB-${shortId}</span>
-          <h4 class="client-order-title">${orderTitle}</h4>
-          <p class="client-order-textile">${orderSubline}</p>
+          <h4 class="client-order-title">${escapeHtmlForDisplay(orderTitle)}</h4>
+          <p class="client-order-textile">${escapeHtmlForDisplay(orderSubline)}</p>
         </div>
         <div class="client-order-status-block">
           <div class="pipeline-indicator-pill ${statusClass}">${status}</div>
@@ -543,7 +543,7 @@ function mountClientNotificationsSection(pane, uid) {
       const shortId = orderDoc.id.substring(0, 8).toUpperCase();
       const title = isReadyToWearOrder(data)
         ? (data.collectionName || "Ready-To-Wear Piece")
-        : formatGarmentName(data.configuration?.silhouette);
+        : resolveSilhouetteLabel(data.configuration);
       return `
         <div class="client-order-row-card">
           <div class="client-order-meta">
@@ -566,6 +566,8 @@ function mountClientNotificationsSection(pane, uid) {
 /** My Profile — the measurement blueprint editor, unchanged from before, just relocated into its own section. */
 function mountClientProfileSection(pane, userDocRef, profileData) {
   const blueprint = profileData.measurementBlueprint || {};
+  const upperBody = blueprint.upperBody || {};
+  const lowerBody = blueprint.lowerBody || {};
 
   pane.innerHTML = `
     <div class="dash-section-header">
@@ -582,35 +584,51 @@ function mountClientProfileSection(pane, userDocRef, profileData) {
         <div class="blueprint-input-grid">
           <div class="metric-input-field">
             <label for="dash-neck">Neck (cm)</label>
-            <input type="number" id="dash-neck" value="${blueprint.neck || ''}" step="0.1" placeholder="--">
+            <input type="number" id="dash-neck" value="${upperBody.neck ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
             <label for="dash-chest">Chest (cm)</label>
-            <input type="number" id="dash-chest" value="${blueprint.chest || ''}" step="0.1" placeholder="--">
+            <input type="number" id="dash-chest" value="${upperBody.chest ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-shoulder">Shoulder (cm)</label>
-            <input type="number" id="dash-shoulder" value="${blueprint.shoulder || ''}" step="0.1" placeholder="--">
+            <label for="dash-across-back-shoulder">Across Back / Shoulder (cm)</label>
+            <input type="number" id="dash-across-back-shoulder" value="${upperBody.acrossBackShoulder ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-sleeve">Sleeve (cm)</label>
-            <input type="number" id="dash-sleeve" value="${blueprint.sleeve || ''}" step="0.1" placeholder="--">
+            <label for="dash-sleeve-length">Sleeve Length (cm)</label>
+            <input type="number" id="dash-sleeve-length" value="${upperBody.sleeveLength ?? ''}" step="0.1" min="0" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-top-length">Top Length (cm)</label>
+            <input type="number" id="dash-top-length" value="${upperBody.topLength ?? ''}" step="0.1" min="0" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-around-arm">Around Arm (cm)</label>
+            <input type="number" id="dash-around-arm" value="${upperBody.aroundArm ?? ''}" step="0.1" min="0" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-wrist">Wrist (cm)</label>
+            <input type="number" id="dash-wrist" value="${upperBody.wrist ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
             <label for="dash-waist">Waist (cm)</label>
-            <input type="number" id="dash-waist" value="${blueprint.waist || ''}" step="0.1" placeholder="--">
+            <input type="number" id="dash-waist" value="${lowerBody.waist ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-hips">Hips (cm)</label>
-            <input type="number" id="dash-hips" value="${blueprint.hips || ''}" step="0.1" placeholder="--">
+            <label for="dash-length">Length (cm)</label>
+            <input type="number" id="dash-length" value="${lowerBody.length ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-outseam">Outseam (cm)</label>
-            <input type="number" id="dash-outseam" value="${blueprint.outseam || ''}" step="0.1" placeholder="--">
+            <label for="dash-thigh">Thigh (cm)</label>
+            <input type="number" id="dash-thigh" value="${lowerBody.thigh ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-inseam">Inseam (cm)</label>
-            <input type="number" id="dash-inseam" value="${blueprint.inseam || ''}" step="0.1" placeholder="--">
+            <label for="dash-knee">Knee (cm)</label>
+            <input type="number" id="dash-knee" value="${lowerBody.knee ?? ''}" step="0.1" min="0" placeholder="--">
+          </div>
+          <div class="metric-input-field">
+            <label for="dash-bar-ankle">Bar/Ankle (cm)</label>
+            <input type="number" id="dash-bar-ankle" value="${lowerBody.barAnkle ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
         </div>
         <button type="submit" class="btn-dashboard-save">Save Metric Shifts</button>
@@ -622,23 +640,33 @@ function mountClientProfileSection(pane, userDocRef, profileData) {
   blueprintForm.addEventListener("submit", async (e) => {
     e.preventDefault();
 
-    const freshBlueprint = {
-      neck: parseFloat(document.getElementById("dash-neck").value) || null,
-      chest: parseFloat(document.getElementById("dash-chest").value) || null,
-      shoulder: parseFloat(document.getElementById("dash-shoulder").value) || null,
-      sleeve: parseFloat(document.getElementById("dash-sleeve").value) || null,
-      waist: parseFloat(document.getElementById("dash-waist").value) || null,
-      hips: parseFloat(document.getElementById("dash-hips").value) || null,
-      outseam: parseFloat(document.getElementById("dash-outseam").value) || null,
-      inseam: parseFloat(document.getElementById("dash-inseam").value) || null,
+    const readMetric = (id) => {
+      const val = document.getElementById(id).value;
+      return val === "" ? null : parseFloat(val);
     };
 
-    const ValidationBounds = { min: 30, max: 200 };
-    let validationError = null;
+    const freshUpperBody = {
+      neck: readMetric("dash-neck"),
+      chest: readMetric("dash-chest"),
+      acrossBackShoulder: readMetric("dash-across-back-shoulder"),
+      sleeveLength: readMetric("dash-sleeve-length"),
+      topLength: readMetric("dash-top-length"),
+      aroundArm: readMetric("dash-around-arm"),
+      wrist: readMetric("dash-wrist"),
+    };
 
-    for (const [key, val] of Object.entries(freshBlueprint)) {
-      if (val !== null && (val < ValidationBounds.min || val > ValidationBounds.max)) {
-        validationError = `The entry for ${key} must sit between valid dimensions (${ValidationBounds.min}cm - ${ValidationBounds.max}cm).`;
+    const freshLowerBody = {
+      waist: readMetric("dash-waist"),
+      length: readMetric("dash-length"),
+      thigh: readMetric("dash-thigh"),
+      knee: readMetric("dash-knee"),
+      barAnkle: readMetric("dash-bar-ankle"),
+    };
+
+    let validationError = null;
+    for (const [key, val] of Object.entries({ ...freshUpperBody, ...freshLowerBody })) {
+      if (val !== null && (Number.isNaN(val) || val < 0)) {
+        validationError = `The entry for ${key} must be a valid, non-negative measurement.`;
         break;
       }
     }
@@ -651,7 +679,8 @@ function mountClientProfileSection(pane, userDocRef, profileData) {
     try {
       await updateDoc(userDocRef, {
         measurementBlueprint: {
-          ...freshBlueprint,
+          upperBody: freshUpperBody,
+          lowerBody: freshLowerBody,
           lastUpdated: serverTimestamp()
         }
       });
@@ -1461,7 +1490,13 @@ function mountBespokeOrdersStream(adminStream) {
       const idShort = orderId.substring(0, 8).toUpperCase();
       const activeStatus = data.commissionStatus || "Pending Studio Review";
       const billingStatus = data.financialStatus || "Awaiting Invoice";
-      const metrics = data.tailoringMetrics || {};
+      // Older commissions predate the Upper/Lower Body restructure and the
+      // Atelier Specification, so every lookup below falls back gracefully
+      // rather than throwing on a missing nested object.
+      const upperMetrics = data.tailoringMetrics?.upperBody || {};
+      const lowerMetrics = data.tailoringMetrics?.lowerBody || {};
+      const atelierSpec = data.atelierSpecification || {};
+      const atelierLabel = formatAtelierName(atelierSpec.selectedAtelier);
 
       const clientFullName = data.clientName || "";
       const clientEmail = data.clientEmail || "Anonymous Guest";
@@ -1476,8 +1511,8 @@ function mountBespokeOrdersStream(adminStream) {
           <div class="rtw-card-header">
             <div class="rtw-card-id-block">
               <span class="admin-id-tag">SB-${idShort}</span>
-              <h4 class="rtw-garment-name">${formatGarmentName(data.configuration?.silhouette)}</h4>
-              <p class="textile-desc">Textile: ${formatTextileName(data.configuration?.textileProfile)}</p>
+              <h4 class="rtw-garment-name">${escapeHtmlForDisplay(resolveSilhouetteLabel(data.configuration))}</h4>
+              <p class="textile-desc">Textile: ${escapeHtmlForDisplay(resolveTextileLabel(data.configuration))}</p>
             </div>
           </div>
 
@@ -1538,15 +1573,28 @@ function mountBespokeOrdersStream(adminStream) {
 
           <button class="btn-inspect-metrics" data-target="drawer-${orderId}">Inspect Specs</button>
           <div id="drawer-${orderId}" class="admin-metrics-drawer" style="display: none;">
+            <p class="pipeline-label" style="margin: 0.75rem 0 0.4rem;">Upper Body</p>
             <div class="drawer-inner-grid">
-              <div class="metric-pill"><span>Neck:</span> <strong>${metrics.neck || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Chest:</span> <strong>${metrics.chest || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Shoulder:</span> <strong>${metrics.shoulder || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Sleeve:</span> <strong>${metrics.sleeve || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Waist:</span> <strong>${metrics.waist || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Hips:</span> <strong>${metrics.hips || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Outseam:</span> <strong>${metrics.outseam || '--'} cm</strong></div>
-              <div class="metric-pill"><span>Inseam:</span> <strong>${metrics.inseam || '--'} cm</strong></div>
+              <div class="metric-pill"><span>Neck:</span> <strong>${upperMetrics.neck ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Chest:</span> <strong>${upperMetrics.chest ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Across Back / Shoulder:</span> <strong>${upperMetrics.acrossBackShoulder ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Sleeve Length:</span> <strong>${upperMetrics.sleeveLength ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Top Length:</span> <strong>${upperMetrics.topLength ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Around Arm:</span> <strong>${upperMetrics.aroundArm ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Wrist:</span> <strong>${upperMetrics.wrist ?? '--'} cm</strong></div>
+            </div>
+            <p class="pipeline-label" style="margin: 0.75rem 0 0.4rem;">Lower Body</p>
+            <div class="drawer-inner-grid">
+              <div class="metric-pill"><span>Waist:</span> <strong>${lowerMetrics.waist ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Length:</span> <strong>${lowerMetrics.length ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Thigh:</span> <strong>${lowerMetrics.thigh ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Knee:</span> <strong>${lowerMetrics.knee ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Bar/Ankle:</span> <strong>${lowerMetrics.barAnkle ?? '--'} cm</strong></div>
+            </div>
+            <p class="pipeline-label" style="margin: 0.75rem 0 0.4rem;">Atelier Specification</p>
+            <div class="drawer-inner-grid">
+              <div class="metric-pill"><span>Atelier:</span> <strong>${atelierLabel}</strong></div>
+              ${atelierSpec.customAtelierName ? `<div class="metric-pill"><span>Custom Atelier:</span> <strong>${escapeHtmlForDisplay(atelierSpec.customAtelierName)}</strong></div>` : ""}
             </div>
           </div>
         </div>
@@ -1921,6 +1969,34 @@ function formatDeliveryDate(rawDate) {
   });
 }
 
+/**
+ * Resolves the display label for an order's silhouette: when the client
+ * chose "Other / Custom Silhouette" and typed a name, that free-text name
+ * takes priority over the generic mapped fallback. Mirrors the existing
+ * atelierSpecification.customAtelierName pattern used elsewhere in this
+ * file. Callers are responsible for HTML-escaping the result before
+ * inserting it into innerHTML, since this may return raw client-entered text.
+ */
+function resolveSilhouetteLabel(configuration) {
+  const config = configuration || {};
+  if (config.silhouette === "other" && config.customSilhouetteName) {
+    return config.customSilhouetteName;
+  }
+  return formatGarmentName(config.silhouette);
+}
+
+/**
+ * Same resolution rule as resolveSilhouetteLabel, for the fabric/textile
+ * selection.
+ */
+function resolveTextileLabel(configuration) {
+  const config = configuration || {};
+  if (config.textileProfile === "other" && config.customTextileName) {
+    return config.customTextileName;
+  }
+  return formatTextileName(config.textileProfile);
+}
+
 function formatGarmentName(slug) {
   const mappings = {
     "signature-kaftan": "Signature Custom Kaftan",
@@ -1939,4 +2015,15 @@ function formatTextileName(slug) {
     "deluxe-cotton": "High-Thread Deluxe Cotton",
   };
   return mappings[slug] || "Selected Material Profile";
+}
+
+function formatAtelierName(slug) {
+  if (!slug) return "Not provided";
+  const mappings = {
+    "accra-flagship": "Suit Boss Flagship Atelier — Accra",
+    "kumasi-studio": "Suit Boss Kumasi Studio",
+    "takoradi-workshop": "Suit Boss Takoradi Workshop",
+    "other": "Other / Custom Atelier",
+  };
+  return mappings[slug] || slug;
 }

@@ -16,9 +16,192 @@ import { showAtelierNotification } from "./ui-feedback.js";
 // re-focused/edited) form fields a second time.
 let pendingBespokeSubmission = null;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// PROPORTION BLUEPRINT — field maps + label constants
+// Centralizes the mapping between the form's input IDs and the data-model
+// keys they feed. Both the Bespoke Order form (custom-order.html) and the
+// dashboard's "My Profile" blueprint editor persist under this same key set,
+// so any future field rename only has to happen here.
+// ─────────────────────────────────────────────────────────────────────────────
+const UPPER_BODY_FIELD_MAP = {
+  neck: "measure-neck",
+  chest: "measure-chest",
+  acrossBackShoulder: "measure-across-back-shoulder",
+  sleeveLength: "measure-sleeve-length",
+  topLength: "measure-top-length",
+  aroundArm: "measure-around-arm",
+  wrist: "measure-wrist",
+};
+
+const LOWER_BODY_FIELD_MAP = {
+  waist: "measure-waist",
+  length: "measure-length",
+  thigh: "measure-thigh",
+  knee: "measure-knee",
+  barAnkle: "measure-bar-ankle",
+};
+
+const MEASUREMENT_LABELS = {
+  neck: "Neck",
+  chest: "Chest",
+  acrossBackShoulder: "Across Back / Shoulder",
+  sleeveLength: "Sleeve Length",
+  topLength: "Top Length",
+  aroundArm: "Around Arm",
+  wrist: "Wrist",
+  waist: "Waist",
+  length: "Length",
+  thigh: "Thigh",
+  knee: "Knee",
+  barAnkle: "Bar/Ankle",
+};
+
+const CUSTOM_ATELIER_VALUE = "other";
+const CUSTOM_STYLE_VALUE = "other";
+const CUSTOM_FABRIC_VALUE = "other";
+
+/**
+ * Minimal HTML escaper for free-text values (custom silhouette/fabric names)
+ * that get interpolated into the checkout modal's innerHTML. Mirrors
+ * dashboard.js's escapeHtmlForDisplay so user-typed text can never break out
+ * of its container or inject markup.
+ */
+function escapeHtmlForModal(rawText) {
+  if (rawText === null || rawText === undefined) return "";
+  return String(rawText)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Reads a group of measurement inputs (upper or lower body) off the live
+ * DOM, using each input's own min/max attributes (already set in the HTML)
+ * as the validity bounds rather than hardcoding a second copy of them here.
+ * Rejects missing, non-numeric, and negative values. Decimal values are
+ * allowed since the inputs already carry step="0.1".
+ */
+function collectMeasurementGroup(fieldMap) {
+  const values = {};
+  let firstError = null;
+
+  for (const [metricKey, elementId] of Object.entries(fieldMap)) {
+    const inputEl = document.getElementById(elementId);
+    const label = MEASUREMENT_LABELS[metricKey] || metricKey;
+
+    if (!inputEl) {
+      values[metricKey] = null;
+      continue;
+    }
+
+    const rawValue = inputEl.value;
+    if (rawValue === "" || rawValue === null) {
+      firstError = firstError || `Please enter your ${label} measurement.`;
+      values[metricKey] = null;
+      continue;
+    }
+
+    const numericValue = parseFloat(rawValue);
+    if (Number.isNaN(numericValue) || numericValue < 0) {
+      firstError = firstError || `Please enter a valid, non-negative measurement for ${label}.`;
+      values[metricKey] = null;
+      continue;
+    }
+
+    const minBound = inputEl.min !== "" ? parseFloat(inputEl.min) : null;
+    const maxBound = inputEl.max !== "" ? parseFloat(inputEl.max) : null;
+    if ((minBound !== null && numericValue < minBound) || (maxBound !== null && numericValue > maxBound)) {
+      const rangeNote = minBound !== null && maxBound !== null ? ` (${minBound}cm - ${maxBound}cm)` : "";
+      firstError = firstError || `Please enter a realistic ${label} measurement${rangeNote}.`;
+      values[metricKey] = null;
+      continue;
+    }
+
+    values[metricKey] = numericValue;
+  }
+
+  return { values, error: firstError };
+}
+
+/**
+ * Wires the Atelier <select> to its "Other / Custom Atelier" text input:
+ * shown + required only when the custom option is active, hidden + cleared
+ * otherwise. Exported so the checkout/edit surfaces could reuse it later,
+ * but currently only called from initOrderCommissionEngine.
+ */
+function syncCustomAtelierField() {
+  const atelierSelect = document.getElementById("order-atelier");
+  const customCell = document.getElementById("order-atelier-custom-cell");
+  const customInput = document.getElementById("order-atelier-custom");
+  if (!atelierSelect || !customCell || !customInput) return;
+
+  const isCustom = atelierSelect.value === CUSTOM_ATELIER_VALUE;
+  customCell.style.display = isCustom ? "" : "none";
+  customInput.required = isCustom;
+  if (!isCustom) customInput.value = "";
+}
+
+/**
+ * Same wiring as syncCustomAtelierField, applied to the Apparel Silhouette
+ * dropdown: reveals + requires the free-text "Custom Silhouette Name" field
+ * only while "Other / Custom Silhouette" is selected.
+ */
+function syncCustomStyleField() {
+  const styleSelect = document.getElementById("order-style");
+  const customCell = document.getElementById("order-style-custom-cell");
+  const customInput = document.getElementById("order-style-custom");
+  if (!styleSelect || !customCell || !customInput) return;
+
+  const isCustom = styleSelect.value === CUSTOM_STYLE_VALUE;
+  customCell.style.display = isCustom ? "" : "none";
+  customInput.required = isCustom;
+  if (!isCustom) customInput.value = "";
+}
+
+/**
+ * Same wiring again, for the Fabric Selection dropdown's "Custom Fabric
+ * Name" field.
+ */
+function syncCustomFabricField() {
+  const fabricSelect = document.getElementById("order-fabric");
+  const customCell = document.getElementById("order-fabric-custom-cell");
+  const customInput = document.getElementById("order-fabric-custom");
+  if (!fabricSelect || !customCell || !customInput) return;
+
+  const isCustom = fabricSelect.value === CUSTOM_FABRIC_VALUE;
+  customCell.style.display = isCustom ? "" : "none";
+  customInput.required = isCustom;
+  if (!isCustom) customInput.value = "";
+}
+
 export function initOrderCommissionEngine() {
   const form = document.getElementById("bespoke-proportion-form");
   if (!form) return;
+
+  // Atelier Specification: toggle the custom-name field's visibility any
+  // time the Atelier selection changes, and run once up front so a
+  // pre-selected "Other" option (e.g. browser form-restore on reload)
+  // starts in the correct state.
+  const atelierSelectEl = document.getElementById("order-atelier");
+  if (atelierSelectEl) {
+    atelierSelectEl.addEventListener("change", syncCustomAtelierField);
+    syncCustomAtelierField();
+  }
+
+  // Apparel Silhouette + Fabric Selection: identical "Other" reveal pattern.
+  const styleSelectEl = document.getElementById("order-style");
+  if (styleSelectEl) {
+    styleSelectEl.addEventListener("change", syncCustomStyleField);
+    syncCustomStyleField();
+  }
+
+  const fabricSelectEl = document.getElementById("order-fabric");
+  if (fabricSelectEl) {
+    fabricSelectEl.addEventListener("change", syncCustomFabricField);
+    syncCustomFabricField();
+  }
 
   form.addEventListener("submit", async (e) => {
     // Prevent default submission behavior entirely to manage network calls manually
@@ -63,47 +246,85 @@ export function initOrderCommissionEngine() {
       return;
     }
 
-    // 2. Capture measurement dimensions from the active form state
-    const dimensionalBlueprint = {
-      neck: parseFloat(document.getElementById("measure-neck").value) || null,
-      chest: parseFloat(document.getElementById("measure-chest").value) || null,
-      shoulder: parseFloat(document.getElementById("measure-shoulder").value) || null,
-      sleeve: parseFloat(document.getElementById("measure-sleeve").value) || null,
-      waist: parseFloat(document.getElementById("measure-waist").value) || null,
-      hips: parseFloat(document.getElementById("measure-hips").value) || null,
-      outseam: parseFloat(document.getElementById("measure-outseam").value) || null,
-      inseam: parseFloat(document.getElementById("measure-inseam").value) || null,
-    };
+    // 2. Capture the Proportion Blueprint from the active form state —
+    // grouped into Upper Body / Lower Body per the current measurement
+    // parameters, using each input's own min/max bounds for validation.
+    const upperBodyResult = collectMeasurementGroup(UPPER_BODY_FIELD_MAP);
+    const lowerBodyResult = collectMeasurementGroup(LOWER_BODY_FIELD_MAP);
 
-    // --- ANATOMICAL DEFENSIVE VALIDATION ENGINE ---
-    const ValidationBounds = { min: 30, max: 200 };
-    let descriptiveValidationError = null;
-
-    for (const [metricKey, metricValue] of Object.entries(dimensionalBlueprint)) {
-      if (metricValue !== null) {
-        if (metricValue < ValidationBounds.min || metricValue > ValidationBounds.max) {
-          descriptiveValidationError = `Please enter a realistic measurement for your ${metricKey} (${ValidationBounds.min}cm - ${ValidationBounds.max}cm).`;
-          break;
-        }
-      } else {
-        descriptiveValidationError = `Please fill out all structural parameters to guarantee a perfect bespoke silhouette cut.`;
-        break;
-      }
-    }
-
-    if (descriptiveValidationError) {
-      showAtelierNotification(descriptiveValidationError, "error");
+    const measurementValidationError = upperBodyResult.error || lowerBodyResult.error;
+    if (measurementValidationError) {
+      showAtelierNotification(measurementValidationError, "error");
       return;
     }
-    // ----------------------------------------------------
 
-    // Measurements and garment selection are validated — stash them and
-    // move to checkout instead of writing to Firestore immediately. The
-    // actual order isn't created until the checkout modal is confirmed.
+    const dimensionalBlueprint = {
+      upperBody: upperBodyResult.values,
+      lowerBody: lowerBodyResult.values,
+    };
+
+    // 3. Capture the Atelier Specification — the existing Atelier dropdown,
+    // plus the "Other / Custom Atelier" free-text name when selected.
+    const atelierSelect = document.getElementById("order-atelier");
+    const customAtelierInput = document.getElementById("order-atelier-custom");
+
+    if (!atelierSelect || !atelierSelect.value) {
+      showAtelierNotification("Please select an Atelier.", "error");
+      return;
+    }
+
+    const selectedAtelier = atelierSelect.value;
+    let customAtelierName = null;
+
+    if (selectedAtelier === CUSTOM_ATELIER_VALUE) {
+      const enteredName = customAtelierInput ? customAtelierInput.value.trim() : "";
+      if (!enteredName) {
+        showAtelierNotification("Please enter your custom Atelier name.", "error");
+        return;
+      }
+      customAtelierName = enteredName;
+    }
+
+    // 4. Capture the free-text Custom Silhouette / Custom Fabric names when
+    // "Other" is selected in either dropdown — same validation shape as the
+    // Custom Atelier field above.
+    const customStyleInput = document.getElementById("order-style-custom");
+    const customFabricInput = document.getElementById("order-fabric-custom");
+    let customSilhouetteName = null;
+    let customTextileName = null;
+
+    if (styleInput.value === CUSTOM_STYLE_VALUE) {
+      const enteredStyle = customStyleInput ? customStyleInput.value.trim() : "";
+      if (!enteredStyle) {
+        showAtelierNotification("Please enter your custom silhouette name.", "error");
+        return;
+      }
+      customSilhouetteName = enteredStyle;
+    }
+
+    if (fabricInput.value === CUSTOM_FABRIC_VALUE) {
+      const enteredFabric = customFabricInput ? customFabricInput.value.trim() : "";
+      if (!enteredFabric) {
+        showAtelierNotification("Please enter your custom fabric name.", "error");
+        return;
+      }
+      customTextileName = enteredFabric;
+    }
+
+    // Measurements, Atelier Specification, and garment selection are all
+    // validated — stash them and move to checkout instead of writing to
+    // Firestore immediately. The actual order isn't created until the
+    // checkout modal is confirmed.
     pendingBespokeSubmission = {
       dimensionalBlueprint,
       silhouette: styleInput.value,
+      customSilhouetteName,
       textileProfile: fabricInput.value,
+      customTextileName,
+      atelierSpecification: {
+        selectedAtelier,
+        customAtelierName,
+      },
     };
 
     openBespokeCheckoutModal();
@@ -122,7 +343,7 @@ function openBespokeCheckoutModal() {
   const portal = document.getElementById("bespoke-checkout-modal-portal");
   if (!portal || !pendingBespokeSubmission) return;
 
-  const { silhouette, textileProfile } = pendingBespokeSubmission;
+  const { silhouette, customSilhouetteName, textileProfile, customTextileName } = pendingBespokeSubmission;
 
   // Delivery date can't be set in the past — floor it at tomorrow, in the
   // visitor's own local date rather than UTC, so "today" matches what they
@@ -137,14 +358,14 @@ function openBespokeCheckoutModal() {
 
         <div class="rtw-modal-header">
           <p class="rtw-modal-eyebrow">Bespoke Commission</p>
-          <h2 class="rtw-modal-title">${formatGarmentSlug(silhouette)}</h2>
+          <h2 class="rtw-modal-title">${escapeHtmlForModal(formatGarmentSlug(silhouette, customSilhouetteName))}</h2>
           <button class="rtw-modal-close" id="bespoke-modal-close" aria-label="Close checkout">&times;</button>
         </div>
 
         <div class="rtw-modal-confirmation-row">
           <div class="rtw-confirmation-chip">
             <span class="rtw-chip-label">Fabric</span>
-            <span class="rtw-chip-value">${formatTextileSlug(textileProfile)}</span>
+            <span class="rtw-chip-value">${escapeHtmlForModal(formatTextileSlug(textileProfile, customTextileName))}</span>
           </div>
         </div>
 
@@ -270,7 +491,7 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     return;
   }
 
-  const { dimensionalBlueprint, silhouette, textileProfile } = pendingBespokeSubmission;
+  const { dimensionalBlueprint, silhouette, customSilhouetteName, textileProfile, customTextileName, atelierSpecification } = pendingBespokeSubmission;
 
   const commissionOrderPayload = {
     clientId: currentUser.uid,
@@ -281,9 +502,12 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     preferredDeliveryDate: checkoutDetails.preferredDeliveryDate,
     configuration: {
       silhouette,
+      customSilhouetteName,
       textileProfile,
+      customTextileName,
     },
     tailoringMetrics: dimensionalBlueprint,
+    atelierSpecification,
     commissionStatus: "Pending Studio Review",
     financialStatus: "Awaiting Invoice",
     orderCreatedTimestamp: serverTimestamp(),
@@ -309,7 +533,8 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     const userProfileRef = doc(db, "users", currentUser.uid);
     await updateDoc(userProfileRef, {
       measurementBlueprint: {
-        ...dimensionalBlueprint,
+        upperBody: dimensionalBlueprint.upperBody,
+        lowerBody: dimensionalBlueprint.lowerBody,
         lastUpdated: serverTimestamp(),
       },
       activeCommissionsCount: increment(1),
@@ -352,9 +577,14 @@ async function finalizeBespokeSubmission(checkoutDetails) {
  */
 async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
   // Map configuration tokens into human-readable titles
-  const silhouetteLabel = formatGarmentSlug(payload.configuration?.silhouette);
-  const textileLabel = formatTextileSlug(payload.configuration?.textileProfile);
-  const metrics = payload.tailoringMetrics;
+  const silhouetteLabel = formatGarmentSlug(payload.configuration?.silhouette, payload.configuration?.customSilhouetteName);
+  const textileLabel = formatTextileSlug(payload.configuration?.textileProfile, payload.configuration?.customTextileName);
+  const upperMetrics = payload.tailoringMetrics?.upperBody || {};
+  const lowerMetrics = payload.tailoringMetrics?.lowerBody || {};
+  const atelierLabel = formatAtelierSlug(payload.atelierSpecification?.selectedAtelier);
+  const customAtelierName = payload.atelierSpecification?.customAtelierName;
+  const customSilhouetteName = payload.configuration?.customSilhouetteName;
+  const customTextileName = payload.configuration?.customTextileName;
 
   // 1. Compilation Parameter Matrix for the Customer Receipt Template
   const clientTemplateParams = {
@@ -362,14 +592,22 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
     order_id: `SB-${orderToken}`,
     garment_selection: silhouetteLabel,
     fabric_selection: textileLabel,
-    neck_metric: metrics.neck,
-    chest_metric: metrics.chest,
-    shoulder_metric: metrics.shoulder,
-    sleeve_metric: metrics.sleeve,
-    waist_metric: metrics.waist,
-    hips_metric: metrics.hips,
-    outseam_metric: metrics.outseam,
-    inseam_metric: metrics.inseam,
+    atelier_selection: atelierLabel,
+    custom_atelier_name: customAtelierName || "",
+    custom_silhouette_name: customSilhouetteName || "",
+    custom_textile_name: customTextileName || "",
+    neck_metric: upperMetrics.neck,
+    chest_metric: upperMetrics.chest,
+    across_back_shoulder_metric: upperMetrics.acrossBackShoulder,
+    sleeve_length_metric: upperMetrics.sleeveLength,
+    top_length_metric: upperMetrics.topLength,
+    around_arm_metric: upperMetrics.aroundArm,
+    wrist_metric: upperMetrics.wrist,
+    waist_metric: lowerMetrics.waist,
+    length_metric: lowerMetrics.length,
+    thigh_metric: lowerMetrics.thigh,
+    knee_metric: lowerMetrics.knee,
+    bar_ankle_metric: lowerMetrics.barAnkle,
   };
 
   // 2. Compilation Parameter Matrix for the Internal Tailor Queue Alert Template
@@ -378,6 +616,10 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
     order_id: `SB-${orderToken}`,
     garment_selection: silhouetteLabel,
     fabric_selection: textileLabel,
+    atelier_selection: atelierLabel,
+    custom_atelier_name: customAtelierName || "",
+    custom_silhouette_name: customSilhouetteName || "",
+    custom_textile_name: customTextileName || "",
   };
 
   try {
@@ -395,22 +637,36 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
   }
 }
 
-function formatGarmentSlug(slug) {
+function formatGarmentSlug(slug, customName) {
+  if (slug === CUSTOM_STYLE_VALUE && customName) return customName;
   const mappings = {
     "signature-kaftan": "Signature Custom Kaftan",
     "bespoke-two-piece": "Premium Two-Piece Suit",
     "luxury-agbada": "Royal Agbada Masterpiece",
     "printed-apparel": "Printed Contemporary Shirt",
+    [CUSTOM_STYLE_VALUE]: "Other / Custom Silhouette",
   };
   return mappings[slug] || slug;
 }
 
-function formatTextileSlug(slug) {
+function formatTextileSlug(slug, customName) {
+  if (slug === CUSTOM_FABRIC_VALUE && customName) return customName;
   const mappings = {
     "premium-wool": "Super 120s Premium Wool",
     "polished-linen": "Polished Tropical Linen",
     "luxury-brocade": "Hand-Woven Luxury Brocade",
     "deluxe-cotton": "High-Thread Deluxe Cotton",
+    [CUSTOM_FABRIC_VALUE]: "Other / Custom Fabric",
+  };
+  return mappings[slug] || slug;
+}
+
+function formatAtelierSlug(slug) {
+  const mappings = {
+    "accra-flagship": "Suit Boss Flagship Atelier — Accra",
+    "kumasi-studio": "Suit Boss Kumasi Studio",
+    "takoradi-workshop": "Suit Boss Takoradi Workshop",
+    [CUSTOM_ATELIER_VALUE]: "Other / Custom Atelier",
   };
   return mappings[slug] || slug;
 }
