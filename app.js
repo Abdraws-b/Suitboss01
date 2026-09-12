@@ -948,15 +948,21 @@ document.addEventListener("DOMContentLoaded", () => {
         activeBlueprintUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists() && docSnap.data().measurementBlueprint) {
             const blueprint = docSnap.data().measurementBlueprint;
+            const upperBody = blueprint.upperBody || {};
+            const lowerBody = blueprint.lowerBody || {};
             const fieldMappings = {
-              "measure-neck":     blueprint.neck,
-              "measure-chest":    blueprint.chest,
-              "measure-shoulder": blueprint.shoulder,
-              "measure-sleeve":   blueprint.sleeve,
-              "measure-waist":    blueprint.waist,
-              "measure-hips":     blueprint.hips,
-              "measure-outseam":  blueprint.outseam,
-              "measure-inseam":   blueprint.inseam,
+              "measure-neck":                   upperBody.neck,
+              "measure-chest":                  upperBody.chest,
+              "measure-across-back-shoulder":   upperBody.acrossBackShoulder,
+              "measure-sleeve-length":          upperBody.sleeveLength,
+              "measure-top-length":             upperBody.topLength,
+              "measure-around-arm":             upperBody.aroundArm,
+              "measure-wrist":                  upperBody.wrist,
+              "measure-waist":                  lowerBody.waist,
+              "measure-length":                 lowerBody.length,
+              "measure-thigh":                  lowerBody.thigh,
+              "measure-knee":                   lowerBody.knee,
+              "measure-bar-ankle":              lowerBody.barAnkle,
             };
 
             for (const [elementId, metricValue] of Object.entries(fieldMappings)) {
