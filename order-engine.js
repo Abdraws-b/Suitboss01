@@ -6,7 +6,12 @@ import {
   increment,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-import { auth, db, authReady } from "./app.js";
+import {
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
+import { auth, db, authReady, storage } from "./app.js";
 import { showAtelierNotification } from "./ui-feedback.js";
 
 // Holds the validated measurement/garment selection between form submission
@@ -15,6 +20,14 @@ import { showAtelierNotification } from "./ui-feedback.js";
 // so this bridges the two steps without re-reading the (possibly already
 // re-focused/edited) form fields a second time.
 let pendingBespokeSubmission = null;
+
+// Holds the actual reference-image File object for a Custom Silhouette
+// selection between the moment the customer picks it and the moment the
+// order is actually written — File objects aren't serializable into
+// pendingBespokeSubmission's eventual Firestore payload, so this is tracked
+// separately and only merged in (as an uploaded Storage URL) at submit time.
+let selectedSilhouetteImageFile = null;
+const MAX_SILHOUETTE_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB — matches the Storage rules limit used elsewhere
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROPORTION BLUEPRINT — field maps + label constants
@@ -146,18 +159,106 @@ function syncCustomAtelierField() {
 /**
  * Same wiring as syncCustomAtelierField, applied to the Apparel Silhouette
  * dropdown: reveals + requires the free-text "Custom Silhouette Name" field
- * only while "Other / Custom Silhouette" is selected.
+ * only while "Other / Custom Silhouette" is selected, and reveals the
+ * (optional) reference-image upload alongside it.
  */
 function syncCustomStyleField() {
   const styleSelect = document.getElementById("order-style");
   const customCell = document.getElementById("order-style-custom-cell");
   const customInput = document.getElementById("order-style-custom");
+  const imageCell = document.getElementById("order-style-image-cell");
   if (!styleSelect || !customCell || !customInput) return;
 
   const isCustom = styleSelect.value === CUSTOM_STYLE_VALUE;
   customCell.style.display = isCustom ? "" : "none";
   customInput.required = isCustom;
   if (!isCustom) customInput.value = "";
+
+  if (imageCell) {
+    imageCell.style.display = isCustom ? "" : "none";
+    if (!isCustom) clearSelectedSilhouetteImage();
+  }
+}
+
+/**
+ * Resets the reference-image picker back to its empty state — used both
+ * when the "Remove selected image" button is clicked and whenever the
+ * Apparel Silhouette dropdown is switched away from "Other / Custom
+ * Silhouette" (the image only makes sense alongside that selection).
+ */
+function clearSelectedSilhouetteImage() {
+  selectedSilhouetteImageFile = null;
+  const fileInput = document.getElementById("order-style-image-file");
+  const dropZoneText = document.getElementById("order-style-image-drop-text");
+  const previewWrap = document.getElementById("order-style-image-preview-wrap");
+  const previewImg = document.getElementById("order-style-image-preview");
+  if (fileInput) fileInput.value = "";
+  if (dropZoneText) dropZoneText.textContent = "Click to upload a reference image, or drag one here";
+  if (previewWrap) previewWrap.style.display = "none";
+  if (previewImg) previewImg.src = "";
+}
+
+/**
+ * Wires the optional reference-image picker attached to the "Other / Custom
+ * Silhouette" option: click-to-browse, drag-and-drop, live thumbnail
+ * preview, and a clear button. Mirrors the collection-image picker pattern
+ * already established in dashboard.js (same validation limits), restyled
+ * for this page's light theme via the .bespoke-image-* classes in main.css.
+ */
+function initSilhouetteImagePicker() {
+  const dropZone = document.getElementById("order-style-image-drop-zone");
+  const fileInput = document.getElementById("order-style-image-file");
+  const dropZoneText = document.getElementById("order-style-image-drop-text");
+  const previewWrap = document.getElementById("order-style-image-preview-wrap");
+  const previewImg = document.getElementById("order-style-image-preview");
+  const previewClearBtn = document.getElementById("order-style-image-preview-clear");
+  if (!dropZone || !fileInput || !previewWrap || !previewImg) return;
+
+  function applySelectedFile(file) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      showAtelierNotification("Please choose an image file (JPG, PNG, or WEBP).", "error");
+      return;
+    }
+    if (file.size > MAX_SILHOUETTE_IMAGE_BYTES) {
+      showAtelierNotification("That image is over 5MB — please choose a smaller file.", "error");
+      return;
+    }
+    selectedSilhouetteImageFile = file;
+    if (dropZoneText) dropZoneText.textContent = file.name;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      previewImg.src = ev.target.result;
+      previewWrap.style.display = "flex";
+    };
+    reader.readAsDataURL(file);
+  }
+
+  fileInput.addEventListener("change", (e) => applySelectedFile(e.target.files[0]));
+
+  ["dragenter", "dragover"].forEach((evtName) => {
+    dropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add("is-drag-active");
+    });
+  });
+  ["dragleave", "drop"].forEach((evtName) => {
+    dropZone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove("is-drag-active");
+    });
+  });
+  dropZone.addEventListener("drop", (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) applySelectedFile(file);
+  });
+
+  if (previewClearBtn) {
+    previewClearBtn.addEventListener("click", () => clearSelectedSilhouetteImage());
+  }
 }
 
 /**
@@ -196,6 +297,7 @@ export function initOrderCommissionEngine() {
     styleSelectEl.addEventListener("change", syncCustomStyleField);
     syncCustomStyleField();
   }
+  initSilhouetteImagePicker();
 
   const fabricSelectEl = document.getElementById("order-fabric");
   if (fabricSelectEl) {
@@ -314,11 +416,13 @@ export function initOrderCommissionEngine() {
     // Measurements, Atelier Specification, and garment selection are all
     // validated — stash them and move to checkout instead of writing to
     // Firestore immediately. The actual order isn't created until the
-    // checkout modal is confirmed.
+    // checkout modal is confirmed. The reference image (if any) travels as
+    // the raw File — it's uploaded to Storage at finalize-time, not here.
     pendingBespokeSubmission = {
       dimensionalBlueprint,
       silhouette: styleInput.value,
       customSilhouetteName,
+      customSilhouetteImageFile: styleInput.value === CUSTOM_STYLE_VALUE ? selectedSilhouetteImageFile : null,
       textileProfile: fabricInput.value,
       customTextileName,
       atelierSpecification: {
@@ -343,7 +447,7 @@ function openBespokeCheckoutModal() {
   const portal = document.getElementById("bespoke-checkout-modal-portal");
   if (!portal || !pendingBespokeSubmission) return;
 
-  const { silhouette, customSilhouetteName, textileProfile, customTextileName } = pendingBespokeSubmission;
+  const { silhouette, customSilhouetteName, customSilhouetteImageFile, textileProfile, customTextileName } = pendingBespokeSubmission;
 
   // Delivery date can't be set in the past — floor it at tomorrow, in the
   // visitor's own local date rather than UTC, so "today" matches what they
@@ -367,6 +471,11 @@ function openBespokeCheckoutModal() {
             <span class="rtw-chip-label">Fabric</span>
             <span class="rtw-chip-value">${escapeHtmlForModal(formatTextileSlug(textileProfile, customTextileName))}</span>
           </div>
+          ${customSilhouetteImageFile ? `
+          <div class="rtw-confirmation-chip">
+            <span class="rtw-chip-label">Reference Image</span>
+            <span class="rtw-chip-value">${escapeHtmlForModal(customSilhouetteImageFile.name)}</span>
+          </div>` : ""}
         </div>
 
         <div class="rtw-modal-form">
@@ -491,27 +600,7 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     return;
   }
 
-  const { dimensionalBlueprint, silhouette, customSilhouetteName, textileProfile, customTextileName, atelierSpecification } = pendingBespokeSubmission;
-
-  const commissionOrderPayload = {
-    clientId: currentUser.uid,
-    clientEmail: currentUser.email,
-    clientName: checkoutDetails.fullName,
-    contactPhone: checkoutDetails.contactPhone,
-    shippingAddress: checkoutDetails.shippingAddress,
-    preferredDeliveryDate: checkoutDetails.preferredDeliveryDate,
-    configuration: {
-      silhouette,
-      customSilhouetteName,
-      textileProfile,
-      customTextileName,
-    },
-    tailoringMetrics: dimensionalBlueprint,
-    atelierSpecification,
-    commissionStatus: "Pending Studio Review",
-    financialStatus: "Awaiting Invoice",
-    orderCreatedTimestamp: serverTimestamp(),
-  };
+  const { dimensionalBlueprint, silhouette, customSilhouetteName, customSilhouetteImageFile, textileProfile, customTextileName, atelierSpecification } = pendingBespokeSubmission;
 
   // Change UI state to prevent multi-click replication anomalies
   const submitBtn = document.getElementById("bespoke-modal-submit");
@@ -522,6 +611,44 @@ async function finalizeBespokeSubmission(checkoutDetails) {
   }
 
   try {
+    // Step A0: Upload the customer's reference image for a Custom
+    // Silhouette, if one was attached. This runs before the order document
+    // is written so the resulting download URL can be saved as part of the
+    // same commission record — mirrors the collection-image upload pattern
+    // already used for admin inventory in dashboard.js.
+    let customSilhouetteImageUrl = null;
+    if (customSilhouetteImageFile) {
+      if (submitBtn) submitBtn.textContent = "Uploading reference image...";
+      const extension = customSilhouetteImageFile.name.split(".").pop();
+      const storagePath = `bespoke-reference-images/${currentUser.uid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
+      const imageStorageRef = storageRef(storage, storagePath);
+      await uploadBytes(imageStorageRef, customSilhouetteImageFile);
+      customSilhouetteImageUrl = await getDownloadURL(imageStorageRef);
+    }
+
+    if (submitBtn) submitBtn.textContent = "Securing Registry Slots...";
+
+    const commissionOrderPayload = {
+      clientId: currentUser.uid,
+      clientEmail: currentUser.email,
+      clientName: checkoutDetails.fullName,
+      contactPhone: checkoutDetails.contactPhone,
+      shippingAddress: checkoutDetails.shippingAddress,
+      preferredDeliveryDate: checkoutDetails.preferredDeliveryDate,
+      configuration: {
+        silhouette,
+        customSilhouetteName,
+        customSilhouetteImageUrl,
+        textileProfile,
+        customTextileName,
+      },
+      tailoringMetrics: dimensionalBlueprint,
+      atelierSpecification,
+      commissionStatus: "Pending Studio Review",
+      financialStatus: "Awaiting Invoice",
+      orderCreatedTimestamp: serverTimestamp(),
+    };
+
     // Step A: Write standalone document to primary orders collection
     const orderCollectionRef = collection(db, "orders");
     const structuralOrderRef = await addDoc(
@@ -550,6 +677,7 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     );
 
     pendingBespokeSubmission = null;
+    selectedSilhouetteImageFile = null;
     closeBespokeCheckoutModal();
 
     // NEW ROUTING GATE: Forward smoothly to order-success.html with the new Firestore Document reference
@@ -560,8 +688,11 @@ async function finalizeBespokeSubmission(checkoutDetails) {
 
   } catch (error) {
     console.error("Studio Commission processing failure event:", error);
+    const isStorageError = error?.code?.startsWith?.("storage/");
     showAtelierNotification(
-      "Production server rejected commission payload.",
+      isStorageError
+        ? "Reference image upload rejected. Check your connection and try again."
+        : "Production server rejected commission payload.",
       "error",
     );
     // Re-enable interface controls if database writes crash out
@@ -585,6 +716,7 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
   const customAtelierName = payload.atelierSpecification?.customAtelierName;
   const customSilhouetteName = payload.configuration?.customSilhouetteName;
   const customTextileName = payload.configuration?.customTextileName;
+  const referenceImageUrl = payload.configuration?.customSilhouetteImageUrl || "";
 
   // 1. Compilation Parameter Matrix for the Customer Receipt Template
   const clientTemplateParams = {
@@ -596,6 +728,7 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
     custom_atelier_name: customAtelierName || "",
     custom_silhouette_name: customSilhouetteName || "",
     custom_textile_name: customTextileName || "",
+    reference_image_url: referenceImageUrl,
     neck_metric: upperMetrics.neck,
     chest_metric: upperMetrics.chest,
     across_back_shoulder_metric: upperMetrics.acrossBackShoulder,
@@ -620,6 +753,7 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
     custom_atelier_name: customAtelierName || "",
     custom_silhouette_name: customSilhouetteName || "",
     custom_textile_name: customTextileName || "",
+    reference_image_url: referenceImageUrl,
   };
 
   try {

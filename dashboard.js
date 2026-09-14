@@ -212,10 +212,10 @@ function buildClientOrderCardHtml(orderDoc) {
   }
 
   const isRTW = isReadyToWearOrder(orderData);
-  const imageUrl = orderData.apparelImage || orderData.imageUrl || "";
+  const imageUrl = orderData.apparelImage || orderData.imageUrl || orderData.configuration?.customSilhouetteImageUrl || "";
 
   let thumbnailHtml = "";
-  if (isRTW && imageUrl) {
+  if (imageUrl && (isRTW || orderData.configuration?.customSilhouetteImageUrl)) {
     thumbnailHtml = `
       <img
         src="${imageUrl}"
@@ -1504,8 +1504,12 @@ function mountBespokeOrdersStream(adminStream) {
       const shippingAddress = data.shippingAddress || "No shipping profile logged";
       const deliveryDate = formatDeliveryDate(data.preferredDeliveryDate);
 
+      const isAttended = !!data.attended;
+
       adminHtmlBlock += `
-        <div class="admin-order-card" data-order-id="${orderId}">
+        <div class="admin-order-card${isAttended ? " is-attended" : ""}" data-order-id="${orderId}">
+
+          ${buildOrderUtilityBarHtml(orderId, isAttended)}
 
           <!-- Header: commission identity, always the first thing read -->
           <div class="rtw-card-header">
@@ -1513,6 +1517,11 @@ function mountBespokeOrdersStream(adminStream) {
               <span class="admin-id-tag">SB-${idShort}</span>
               <h4 class="rtw-garment-name">${escapeHtmlForDisplay(resolveSilhouetteLabel(data.configuration))}</h4>
               <p class="textile-desc">Textile: ${escapeHtmlForDisplay(resolveTextileLabel(data.configuration))}</p>
+              ${data.configuration?.customSilhouetteImageUrl ? `
+              <a href="${data.configuration.customSilhouetteImageUrl}" target="_blank" rel="noopener noreferrer" class="admin-reference-image-link">
+                <img src="${data.configuration.customSilhouetteImageUrl}" alt="Customer-submitted reference image" class="admin-reference-image-thumb" loading="lazy">
+                <span>View reference image</span>
+              </a>` : ""}
             </div>
           </div>
 
@@ -1645,6 +1654,9 @@ function mountBespokeOrdersStream(adminStream) {
       });
     });
 
+    // NEW: Attended checkbox + Delete button
+    wireOrderUtilityBarHandlers(adminStream);
+
   }, (error) => {
     console.error("Admin stream synchronization lost:", error);
     adminStream.innerHTML = `<p style="color:#e74c3c; padding:2rem;">Stream error: ${error.message}</p>`;
@@ -1705,8 +1717,12 @@ function mountReadyToWearOrdersStream(adminStream) {
         ? `<img src="${apparelImage}" alt="${collectionName}" loading="lazy" class="rtw-card-thumb">`
         : `<div class="rtw-card-thumb rtw-card-thumb--empty"></div>`;
 
+      const isAttended = !!data.attended;
+
       rtwHtmlBlock += `
-        <div class="admin-order-card rtw-order-card" data-order-id="${orderId}">
+        <div class="admin-order-card rtw-order-card${isAttended ? " is-attended" : ""}" data-order-id="${orderId}">
+
+          ${buildOrderUtilityBarHtml(orderId, isAttended)}
 
           <!-- Header: garment identity + thumbnail, always the first thing read -->
           <div class="rtw-card-header">
@@ -1856,6 +1872,9 @@ function mountReadyToWearOrdersStream(adminStream) {
       });
     });
 
+    // NEW: Attended checkbox + Delete button
+    wireOrderUtilityBarHandlers(adminStream);
+
   }, (error) => {
     console.error("Ready-To-Wear admin stream synchronization lost:", error);
     adminStream.innerHTML = `<p style="color:#e74c3c; padding:2rem;">Stream error: ${error.message}</p>`;
@@ -1905,6 +1924,101 @@ function personIconSvg() {
 
 function calendarIconSvg() {
   return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><path d="M16 2v4"></path><path d="M8 2v4"></path><path d="M3 10h18"></path></svg>`;
+}
+
+/**
+ * NEW FEATURE: Order attended-state + delete controls.
+ * Trash icon used by .btn-delete-order across both the bespoke and
+ * Ready-To-Wear admin order cards.
+ */
+function trashIconSvg() {
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`;
+}
+
+/**
+ * Builds the shared "Mark as Attended" checkbox + "Delete" button row shown
+ * at the top of every admin order card (bespoke and Ready-To-Wear alike).
+ * `attended` reflects the order doc's `attended` boolean (missing/false =
+ * a fresh, unattended order — the default for anything that predates this
+ * field). Both handlers are wired once per render in
+ * wireOrderUtilityBarHandlers() below, shared by both streams.
+ */
+function buildOrderUtilityBarHtml(orderId, attended) {
+  return `
+    <div class="order-utility-bar">
+      <label class="order-attended-toggle">
+        <input type="checkbox" class="order-attended-checkbox" data-id="${orderId}" ${attended ? "checked" : ""}>
+        <span class="custom-checkbox"></span>
+        <span class="attended-toggle-label">${attended ? "Attended" : "Mark as Attended"}</span>
+      </label>
+      <button type="button" class="btn-delete-order" data-id="${orderId}" aria-label="Delete this order permanently">
+        ${trashIconSvg()}
+        <span>Delete</span>
+      </button>
+    </div>
+  `;
+}
+
+/**
+ * Wires the attended checkbox and delete button for every card currently
+ * rendered inside `adminStream`. Called once per onSnapshot render in both
+ * mountBespokeOrdersStream() and mountReadyToWearOrdersStream() — identical
+ * behavior in both, so it lives here instead of being duplicated twice.
+ *
+ * Attended: writes `attended: true/false` onto the order doc. The onSnapshot
+ * listener re-renders on that write anyway, but we also toggle the class
+ * and label immediately so the UI doesn't wait a round trip to feel
+ * responsive, and revert the checkbox if the write fails.
+ *
+ * Delete: confirms first (destructive, no undo), then deletes the order doc.
+ * The onSnapshot listener removes the card from the list automatically once
+ * Firestore confirms the delete, so no manual DOM removal is needed here.
+ */
+function wireOrderUtilityBarHandlers(adminStream) {
+  adminStream.querySelectorAll(".order-attended-checkbox").forEach((checkbox) => {
+    checkbox.addEventListener("change", async (e) => {
+      const targetOrderId = e.target.dataset.id;
+      const isAttended = e.target.checked;
+      const idShort = targetOrderId.substring(0, 8).toUpperCase();
+      const card = adminStream.querySelector(`.admin-order-card[data-order-id="${targetOrderId}"]`);
+      const labelEl = e.target.closest(".order-attended-toggle")?.querySelector(".attended-toggle-label");
+
+      // Optimistic UI update
+      if (card) card.classList.toggle("is-attended", isAttended);
+      if (labelEl) labelEl.textContent = isAttended ? "Attended" : "Mark as Attended";
+
+      try {
+        await updateDoc(doc(db, "orders", targetOrderId), { attended: isAttended });
+        showAtelierNotification(`Order SB-${idShort} marked as ${isAttended ? "attended" : "not yet attended"}.`);
+      } catch (err) {
+        console.error("Failed to update attended flag:", err);
+        // Revert optimistic update on failure
+        e.target.checked = !isAttended;
+        if (card) card.classList.toggle("is-attended", !isAttended);
+        if (labelEl) labelEl.textContent = !isAttended ? "Attended" : "Mark as Attended";
+        showAtelierNotification("Server rejected the attended status update.", "error");
+      }
+    });
+  });
+
+  adminStream.querySelectorAll(".btn-delete-order").forEach((button) => {
+    button.addEventListener("click", async (e) => {
+      const targetOrderId = e.currentTarget.dataset.id;
+      const idShort = targetOrderId.substring(0, 8).toUpperCase();
+      const confirmed = window.confirm(`Delete order SB-${idShort}? This cannot be undone.`);
+      if (!confirmed) return;
+
+      e.currentTarget.disabled = true;
+      try {
+        await deleteDoc(doc(db, "orders", targetOrderId));
+        showAtelierNotification(`Order SB-${idShort} deleted.`);
+      } catch (err) {
+        console.error("Failed to delete order:", err);
+        e.currentTarget.disabled = false;
+        showAtelierNotification("Server rejected the delete request.", "error");
+      }
+    });
+  });
 }
 
 // ── SIDEBAR NAV ICONS ──

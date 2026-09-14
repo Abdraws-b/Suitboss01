@@ -232,6 +232,25 @@
                         <span class="error-indicator" aria-live="polite"></span>
                     </div>
 
+                    <div class="input-cell" id="order-style-image-cell" style="display: none;">
+                        <label for="order-style-image-file">Reference Image (optional)</label>
+                        <label for="order-style-image-file" class="bespoke-image-drop-zone" id="order-style-image-drop-zone">
+                            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            <span class="bespoke-image-drop-text" id="order-style-image-drop-text">Click to upload a reference image, or drag one here</span>
+                            <span class="bespoke-image-drop-hint">JPG, PNG, or WEBP &mdash; up to 5MB</span>
+                            <input type="file" id="order-style-image-file" accept="image/png,image/jpeg,image/webp" hidden>
+                        </label>
+                        <div class="bespoke-image-preview-wrap" id="order-style-image-preview-wrap" style="display: none;">
+                            <img src="" alt="Reference silhouette preview" class="bespoke-image-preview" id="order-style-image-preview">
+                            <button type="button" class="bespoke-image-preview-clear" id="order-style-image-preview-clear" aria-label="Remove selected image">&times;</button>
+                        </div>
+                        <span class="error-indicator" aria-live="polite"></span>
+                    </div>
+
                     <div class="input-cell">
                         <label for="order-fabric">Fabric Selection</label>
                         <select id="order-fabric" name="fabric" required>

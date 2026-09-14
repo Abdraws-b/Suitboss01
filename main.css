@@ -611,6 +611,89 @@
   border-bottom-color: var(--color-accent);
 }
 
+/* --- Bespoke Commission: Reference Image upload (Custom Silhouette) ---
+   Light-theme counterpart to the admin dashboard's dark .inv-file-drop-zone
+   pattern — same structure and behavior, restyled to match this page's
+   white-canvas / gold-accent aesthetic instead of reusing the dark admin
+   classes verbatim. */
+.bespoke-image-drop-zone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+  background-color: transparent;
+  border: 1.5px dashed var(--color-border-slate);
+  padding: 1.75rem 1.25rem;
+  cursor: pointer;
+  color: var(--color-primary);
+  transition: var(--transition-luxury);
+}
+
+.bespoke-image-drop-zone:hover,
+.bespoke-image-drop-zone.is-drag-active {
+  border-color: var(--color-accent);
+  background-color: rgba(197, 168, 128, 0.06);
+  color: var(--color-accent);
+}
+
+.bespoke-image-drop-text {
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.bespoke-image-drop-hint {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  color: var(--color-border-slate);
+}
+
+.bespoke-image-preview-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--color-border-slate);
+  padding: 0.6rem;
+}
+
+.bespoke-image-preview {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 1px solid var(--color-accent);
+  padding: 2px;
+  background: var(--color-bg-canvas);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.bespoke-image-preview-clear {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border-slate);
+  background-color: transparent;
+  color: var(--color-primary);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-luxury);
+  margin-left: auto;
+}
+
+.bespoke-image-preview-clear:hover {
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
 /* --- Password visibility toggle ---
    Wraps the password <input> so the eye-toggle button can be absolutely
    positioned inside it without disturbing the underline-only input style
@@ -1655,6 +1738,7 @@
 .admin-order-card {
   background: #141414;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--color-accent);
   padding: 2rem;
   margin-bottom: 1.5rem;
   transition: var(--transition-luxury);
@@ -1662,7 +1746,100 @@
 
 .admin-order-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
+  border-left-color: var(--color-accent);
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+}
+
+/* ==========================================================================
+   NEW FEATURE — ORDER UTILITY BAR: "Mark as Attended" checkbox + "Delete"
+   button, shown at the top of every admin order card (bespoke and
+   Ready-To-Wear). Unattended orders keep the gold left-edge accent above
+   so freshly-arrived orders stay visually distinct from ones the admin has
+   already dealt with; checking "Attended" mutes the card so the list reads
+   at a glance which orders still need action.
+   ========================================================================== */
+.order-utility-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.order-attended-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  user-select: none;
+  font-family: var(--font-body);
+  color: #9a9a9a;
+}
+
+.order-attended-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.order-attended-toggle .attended-toggle-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.order-attended-toggle:has(input:checked) .attended-toggle-label {
+  color: var(--color-accent);
+}
+
+.btn-delete-order {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  color: rgba(220, 38, 38, 0.75);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.45rem 0.9rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.25s ease;
+}
+
+.btn-delete-order:hover:not(:disabled) {
+  background-color: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.65);
+  color: #ef4444;
+}
+
+.btn-delete-order:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-delete-order svg {
+  flex-shrink: 0;
+}
+
+/* Attended state: dim the whole card and swap the accent edge to a neutral
+   tone so the eye is drawn to what's still outstanding, not what's done.
+   Hovering brings it back to full strength so nothing is ever hard to read. */
+.admin-order-card.is-attended {
+  border-left-color: rgba(255, 255, 255, 0.12);
+  opacity: 0.6;
+}
+
+.admin-order-card.is-attended:hover {
+  opacity: 1;
 }
 
 .admin-order-row {
@@ -1709,6 +1886,32 @@
   font-family: var(--font-body);
   font-size: var(--font-size-small);
   color: #9a9a9a;
+}
+
+.admin-reference-image-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: var(--transition-luxury);
+}
+
+.admin-reference-image-link:hover {
+  color: #fff;
+}
+
+.admin-reference-image-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border: 1px solid var(--color-accent);
+  border-radius: 2px;
+  background: #111;
+  flex-shrink: 0;
 }
 
 .admin-pipeline-group-cell {
@@ -4134,6 +4337,11 @@ body.atelier-drawer-open {
     flex-wrap: wrap;
     gap: 0.5rem;
   }
+
+  .order-utility-bar {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
 }
 
 /* --- F. Admin — Inventory Matrix panel + add-collection form --- */
@@ -4185,7 +4393,9 @@ body.atelier-drawer-open {
   .btn-inv-toggle-stock,
   .btn-send-delivery-note,
   .status-modifier-dropdown,
-  .billing-modifier-dropdown {
+  .billing-modifier-dropdown,
+  .btn-delete-order,
+  .order-attended-toggle input[type="checkbox"] {
     min-height: 44px;
   }
 }
