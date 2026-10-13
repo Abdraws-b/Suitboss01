@@ -39,24 +39,60 @@
    perspective-correct tilt reads as genuinely dimensional rather than a
    flat spin. clamp() keeps it fluidly responsive without needing a
    separate breakpoint override for every screen size. */
-.brand-logo-3d-wrap {
-  display: inline-block;
-  perspective: 600px;
+.brand-lockup {
+  /* Tunable crop: --logo-aspect = width/height of the source SVG,
+     --mark-share = fraction of that width occupied by the monogram. */
+  --logo-aspect: 3.9;
+  --mark-share: 0.22;
+  --mark-h: clamp(46px, 6vw, 68px);
+  gap: clamp(0.75rem, 1.6vw, 1.25rem);
+  transition: opacity 0.4s ease;
 }
 
-.brand-logo-img {
+.brand-lockup:hover {
+  opacity: 0.85;
+}
+
+.brand-mark {
   display: block;
-  height: clamp(30px, 4.5vw, 46px);
-  width: auto;
-  transform-style: preserve-3d;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.4));
-  animation: brandLogoFloat3D 6s ease-in-out infinite;
-  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  height: var(--mark-h);
+  width: calc(var(--mark-h) * var(--logo-aspect) * var(--mark-share));
+  overflow: hidden;
 }
 
-.brand-logo:hover .brand-logo-img {
-  animation-play-state: paused;
-  transform: rotateY(20deg) rotateX(-4deg) scale(1.06);
+.brand-mark-img {
+  display: block;
+  height: 100%;
+  width: auto;
+  max-width: none;
+}
+
+.brand-divider {
+  flex-shrink: 0;
+  width: 1px;
+  height: calc(var(--mark-h) * 0.7);
+  background-color: rgba(197, 168, 128, 0.55);
+}
+
+.brand-wordmark {
+  font-family: var(--font-heading);
+  font-size: clamp(1.5rem, 2.4vw, 2.1rem);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-accent);
+}
+
+@media screen and (max-width: 480px) {
+  .brand-lockup {
+    --mark-h: 44px;
+    gap: 0.7rem;
+  }
+  .brand-wordmark {
+    font-size: 1.4rem;
+  }
 }
 
 @keyframes brandLogoFloat3D {
@@ -66,12 +102,6 @@
   }
   50% {
     transform: rotateY(12deg) rotateX(-3deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .brand-logo-img {
-    animation: none;
   }
 }
 
@@ -1733,6 +1763,128 @@
 
 .admin-stream-container::-webkit-scrollbar-thumb:hover {
   background-color: rgba(197, 168, 128, 0.7);
+}
+
+/* ==========================================================================
+   NEW FEATURE — ORDER DATE SEARCH + DATE GROUPING
+   Sits above .admin-stream-container on both the Bespoke and Ready-To-Wear
+   admin ledgers. Lets the admin jump to every order that arrived on a given
+   day; orders themselves are rendered inside .order-date-group blocks so
+   they read as clearly separated, date-labelled batches.
+   ========================================================================== */
+.order-date-search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.25rem;
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 3px solid var(--color-accent);
+}
+
+.order-date-search-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.order-date-search-field label {
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9a9a9a;
+}
+
+.order-date-search-input {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--text-light);
+  background: #0c0c0c;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 0.55rem 0.75rem;
+  color-scheme: dark;
+}
+
+.order-date-search-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.btn-date-clear {
+  align-self: flex-end;
+  background: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #9a9a9a;
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.btn-date-clear:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.order-date-search-status {
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--color-accent);
+  margin: 0;
+  flex-basis: 100%;
+}
+
+.order-date-group {
+  margin-bottom: 0.5rem;
+}
+
+.order-date-group-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid rgba(197, 168, 128, 0.35);
+}
+
+.order-date-heading {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--text-light);
+  margin: 0;
+}
+
+.order-date-count {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-accent);
+}
+
+.order-date-empty-notice {
+  margin-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .order-date-search-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .btn-date-clear {
+    align-self: stretch;
+  }
 }
 
 .admin-order-card {
@@ -5329,5 +5481,489 @@ body.atelier-drawer-open {
 @media (prefers-reduced-motion: reduce) {
   .atelier-chat-panel {
     transition: opacity 0.2s ease;
+  }
+}
+
+/* ==========================================================================
+   LOOKBOOK CATEGORY FILTER
+   Solid Midnight Navy pills with Antique Gold text. Hover and the active
+   category invert to a gold fill with black text. Flat by design: no
+   shadows, no glow. The bar is generated by renderLookbookFilters() in
+   app.js from admin-assigned inventory categories.
+   ========================================================================== */
+
+/* Pulls the bar up into the .section-header's bottom margin so it reads as
+   part of the header block, then restores breathing room above the grid. */
+.lookbook-filter-mount {
+  margin: -1.5rem 0 2.5rem;
+}
+
+.lookbook-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.lookbook-filter-group {
+  position: relative; /* offsetParent for scroll-into-view maths in app.js */
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.75rem;
+  min-width: 0;
+  /* Padding keeps the focus outline from being clipped by overflow */
+  padding: 4px;
+  margin: -4px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.lookbook-filter-group::-webkit-scrollbar {
+  display: none;
+}
+
+.lookbook-filter-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.7rem 1.35rem;
+  margin: 0;
+  background-color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-pill);
+  box-shadow: none;
+  color: var(--color-accent);
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+.lookbook-filter-btn:hover,
+.lookbook-filter-btn.is-active {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #000000;
+}
+
+/* Keyboard focus: a crisp outline, never a glow */
+.lookbook-filter-btn:focus {
+  outline: none;
+}
+
+.lookbook-filter-btn:focus-visible {
+  outline: 1px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.lookbook-filter-tally {
+  font-size: 0.7rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.lookbook-filter-status {
+  flex: 0 0 auto;
+  color: rgba(15, 26, 44, 0.58);
+  font-family: var(--font-body);
+  font-size: var(--font-size-small);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Cards hidden by the filter. Needed because .atelier-card sets display:flex,
+   which would otherwise override the [hidden] attribute. */
+.atelier-card[hidden] {
+  display: none;
+}
+
+@media screen and (max-width: 767px) {
+  .lookbook-filter-mount {
+    margin: -0.75rem 0 1.75rem;
+  }
+
+  /* Bar becomes: scrolling pill row, then the count beneath it */
+  .lookbook-filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.9rem;
+  }
+
+  .lookbook-filter-group {
+    gap: 0.6rem;
+    scroll-snap-type: x proximity;
+  }
+
+  .lookbook-filter-btn {
+    padding: 0.75rem 1.25rem; /* ≥40px touch target */
+    scroll-snap-align: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lookbook-filter-btn {
+    transition: none;
+  }
+}
+
+
+/* ==========================================================================
+   ADMIN INVENTORY — CATEGORY FIELD
+   Dark dashboard surface. Reuses the existing input treatment from the
+   creation form (.inv-form-field input) and the live price inputs.
+   ========================================================================== */
+
+.inv-field-hint {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #7f8c8d;
+}
+
+.inv-card-category {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: -0.5rem 0 1.1rem;
+}
+
+.inv-card-category-label {
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.inv-category-live-input {
+  flex: 1;
+  min-width: 0;
+  background-color: #1e1e1e;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  color: #e8e8e8;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  padding: 0.4rem 0.6rem;
+  outline: none;
+  transition: border-color 0.25s ease;
+}
+
+.inv-category-live-input:focus {
+  border-color: var(--color-accent);
+}
+
+
+/* ==========================================================================
+   HERO SHOWCASE — eight featured-piece cards beneath the hero CTA
+   Layout: one row showing eight cards on desktop; the same row on tablet and
+   phone with fixed-width cards that can also be swiped. Motion is driven by
+   the HERO SHOWCASE script in index.html: the row advances one card at a
+   time (the first card leaves on the left and re-enters from the right),
+   holds for ~10s, then advances again. Hover, touch, keyboard focus and the
+   open preview all hold it still.
+   ========================================================================== */
+
+/* The hero becomes a centred column (copy block, then cards). min-height
+   instead of a fixed height lets it grow on short screens rather than clip.
+   --showcase-drop pushes the cards down; the same amount is added to the top
+   padding so the headline block keeps its original position. */
+.hero-stage {
+  --hero-pad: 4rem;
+  --showcase-drop: clamp(1.75rem, 6vh, 4rem);
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: clamp(2.25rem, 6vh, 4rem);
+  height: auto;
+  min-height: 100vh;
+  padding-inline: var(--hero-pad);
+  padding-block: calc(7rem + var(--showcase-drop)) 3.5rem; /* top clears the overlay header */
+}
+
+.hero-showcase {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  margin-top: var(--showcase-drop);
+}
+
+.hero-showcase-track {
+  --showcase-gap: clamp(1rem, 1.8vw, 2rem);
+  --showcase-ratio: 4 / 3; /* card shape: change once here to retune every card (e.g. 4 / 5 for portrait) */
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--showcase-gap);
+  list-style: none;
+  /* The 4px padding / -4px margin pair keeps the cards' outer edges aligned
+     with the headline while leaving room for the keyboard focus ring. */
+  margin: -4px;
+  padding: 4px;
+  overflow: hidden;
+  scroll-behavior: auto; /* the script animates scrollLeft itself */
+}
+
+/* Exactly eight cards fill the row width on desktop */
+.hero-showcase-item {
+  flex: 0 0 calc((100% - 7 * var(--showcase-gap)) / 8);
+  min-width: 0;
+}
+
+.hero-showcase-card {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+  aspect-ratio: var(--showcase-ratio);
+  overflow: hidden;
+  background-color: rgba(15, 26, 44, 0.6);
+  border: 1px solid rgba(197, 168, 128, 0.3);
+  border-radius: 8px;
+  transition:
+    border-color 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-showcase-card:hover {
+  border-color: var(--color-accent);
+  background-color: rgba(15, 26, 44, 0.72);
+}
+
+.hero-showcase-card:focus {
+  outline: none;
+}
+
+.hero-showcase-card:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.hero-showcase-media {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* An <img> whose file isn't uploaded yet is hidden by its onerror handler,
+   leaving the placeholder panel instead of a broken-image icon. */
+.hero-showcase-media img[hidden] {
+  display: none;
+}
+
+.hero-showcase-media img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.hero-showcase-card:hover .hero-showcase-media img {
+  transform: scale(1.05);
+}
+
+/* Tablet + phone: fixed-width cards in a row that bleeds to the screen edges
+   (first card stays aligned with the headline) and can be swiped by hand. */
+@media screen and (max-width: 1024px) {
+  .hero-stage {
+    min-height: 100svh;
+    padding-block: calc(6.5rem + var(--showcase-drop)) 2.5rem;
+  }
+
+  .hero-showcase {
+    width: auto;
+    margin-inline: calc(var(--hero-pad) * -1);
+  }
+
+  .hero-showcase-track {
+    --showcase-gap: 1rem;
+    margin: 0;
+    padding: 6px var(--hero-pad);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .hero-showcase-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hero-showcase-item {
+    flex: 0 0 clamp(132px, 34vw, 176px);
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .hero-stage {
+    --hero-pad: 1.75rem;
+  }
+}
+
+@media screen and (max-width: 480px) {
+  .hero-stage {
+    --hero-pad: 1.25rem;
+  }
+
+  .hero-showcase-track {
+    --showcase-gap: 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-showcase-card,
+  .hero-showcase-media img {
+    transition: none;
+  }
+
+  .hero-showcase-card:hover .hero-showcase-media img {
+    transform: none;
+  }
+}
+
+
+/* ==========================================================================
+   HERO SHOWCASE PREVIEW (native <dialog>)
+   Full-screen, dimmed navy surface with the enlarged image centred. Flat
+   controls in Antique Gold — no shadows, no glow.
+   ========================================================================== */
+
+.showcase-viewer {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+}
+
+.showcase-viewer[open] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.5rem, 3vw, 2.5rem);
+  padding: 4.5rem clamp(0.75rem, 4vw, 3rem) 3rem;
+  animation: showcaseViewerIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.showcase-viewer::backdrop {
+  background-color: rgba(15, 26, 44, 0.94);
+}
+
+@keyframes showcaseViewerIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.showcase-viewer-stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.showcase-viewer-img {
+  display: block;
+  max-width: 100%;
+  max-height: calc(100vh - 8rem);
+  max-height: calc(100dvh - 8rem);
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.showcase-viewer-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  background-color: transparent;
+  border: 1px solid rgba(197, 168, 128, 0.4);
+  border-radius: 50%;
+  color: var(--color-accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
+}
+
+.showcase-viewer-btn[hidden] {
+  display: none;
+}
+
+.showcase-viewer-btn:hover {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #000000;
+}
+
+.showcase-viewer-btn:focus {
+  outline: none;
+}
+
+.showcase-viewer-btn:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+.showcase-viewer-close {
+  position: absolute;
+  top: 1.25rem;
+  right: clamp(0.75rem, 4vw, 3rem);
+}
+
+/* Phones: arrows drop below the image so it can use the full width */
+@media screen and (max-width: 640px) {
+  .showcase-viewer[open] {
+    flex-wrap: wrap;
+    align-content: center;
+    padding-inline: 1rem;
+  }
+
+  .showcase-viewer-stage {
+    order: 1;
+    flex: 1 1 100%;
+  }
+
+  .showcase-viewer-prev { order: 2; margin-top: 1.25rem; }
+  .showcase-viewer-next { order: 3; margin-top: 1.25rem; }
+
+  .showcase-viewer-img {
+    max-height: calc(100vh - 13rem);
+    max-height: calc(100dvh - 13rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-viewer[open] {
+    animation: none;
+  }
+
+  .showcase-viewer-btn {
+    transition: none;
   }
 }

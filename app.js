@@ -19,6 +19,7 @@ import {
 import { getStorage } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 import { initAuthEngine } from "./auth.js";
 import { showAtelierNotification } from "./ui-feedback.js";
+import { ALL_CATEGORIES, categorySlug, resolveCategory, escapeHtml } from "./category-utils.js";
 // order-engine.js and dashboard.js are intentionally NOT statically imported
 // here — see the AUTH-html-breaks-if-order-engine-breaks incident this
 // fixes, explained just below the DOMContentLoaded orchestration.
@@ -599,6 +600,121 @@ function closeRTWCheckoutModal() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// LOOKBOOK CATEGORY FILTER
+// Filter buttons are derived from the categories admins assign in Inventory.
+// Filtering toggles the `hidden` attribute on already-rendered cards instead of
+// re-rendering, so selected sizes survive and no listeners are rebuilt.
+// The active filter is mirrored to ?category=<slug> (replaceState, no history
+// spam) so a filtered view can be shared and survives a refresh.
+// ─────────────────────────────────────────────────────────────────────────────
+const CATEGORY_QUERY_PARAM = "category";
+
+let activeCategoryFilter = (() => {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get(CATEGORY_QUERY_PARAM);
+    return fromUrl ? categorySlug(fromUrl) || ALL_CATEGORIES : ALL_CATEGORIES;
+  } catch (_) {
+    return ALL_CATEGORIES;
+  }
+})();
+
+function syncCategoryFilterToUrl() {
+  try {
+    const url = new URL(window.location.href);
+    if (activeCategoryFilter === ALL_CATEGORIES) {
+      url.searchParams.delete(CATEGORY_QUERY_PARAM);
+    } else {
+      url.searchParams.set(CATEGORY_QUERY_PARAM, activeCategoryFilter);
+    }
+    window.history.replaceState(window.history.state, "", url);
+  } catch (_) { /* non-critical: filtering still works without URL sync */ }
+}
+
+/** Show/hide cards for the active filter, then refresh button state + result count. */
+function applyLookbookFilter(grid) {
+  const mount = document.getElementById("lookbook-filter-mount");
+  const cards = grid.querySelectorAll(".atelier-card[data-category]");
+  let visible = 0;
+
+  cards.forEach((card) => {
+    const match = activeCategoryFilter === ALL_CATEGORIES || card.dataset.category === activeCategoryFilter;
+    card.hidden = !match;
+    if (match) visible += 1;
+  });
+
+  if (!mount) return;
+  mount.querySelectorAll(".lookbook-filter-btn").forEach((btn) => {
+    const isActive = btn.dataset.filter === activeCategoryFilter;
+    btn.classList.toggle("is-active", isActive);
+    btn.setAttribute("aria-pressed", String(isActive));
+  });
+  const status = mount.querySelector(".lookbook-filter-status");
+  if (status) status.textContent = `${visible} ${visible === 1 ? "piece" : "pieces"}`;
+}
+
+/** Build the filter bar from { slug → { label, count } }. Hidden when there's nothing to choose between. */
+function renderLookbookFilters(tally, grid) {
+  const mount = document.getElementById("lookbook-filter-mount");
+  if (!mount) return;
+
+  const entries = [...tally.entries()].sort((x, y) => x[1].label.localeCompare(y[1].label));
+
+  if (activeCategoryFilter !== ALL_CATEGORIES && !tally.has(activeCategoryFilter)) {
+    activeCategoryFilter = ALL_CATEGORIES; // stale link or category no longer stocked
+    syncCategoryFilterToUrl();
+  }
+
+  if (entries.length < 2) {
+    mount.hidden = true;
+    mount.innerHTML = "";
+    applyLookbookFilter(grid);
+    return;
+  }
+
+  const total = entries.reduce((sum, [, v]) => sum + v.count, 0);
+  const button = (slug, label, count) => `
+    <button type="button" class="lookbook-filter-btn" data-filter="${escapeHtml(slug)}" aria-pressed="false">
+      <span class="lookbook-filter-label">${escapeHtml(label)}</span>
+      <span class="lookbook-filter-tally" aria-hidden="true">${count}</span>
+    </button>`;
+
+  mount.hidden = false;
+  mount.innerHTML = `
+    <div class="lookbook-filter-bar">
+      <div class="lookbook-filter-group" role="group" aria-label="Filter pieces by category">
+        ${button(ALL_CATEGORIES, "All", total)}
+        ${entries.map(([slug, v]) => button(slug, v.label, v.count)).join("")}
+      </div>
+      <p class="lookbook-filter-status" role="status" aria-live="polite"></p>
+    </div>`;
+
+  // The mount node persists across snapshots, so bind exactly once.
+  if (!mount.dataset.bound) {
+    mount.dataset.bound = "1";
+    mount.addEventListener("click", (e) => {
+      const btn = e.target.closest(".lookbook-filter-btn");
+      if (!btn) return;
+      const next = btn.dataset.filter;
+      if (next === activeCategoryFilter) return;
+      activeCategoryFilter = next;
+      syncCategoryFilterToUrl();
+      const liveGrid = document.querySelector(".atelier-grid");
+      if (liveGrid) applyLookbookFilter(liveGrid);
+    });
+  }
+
+  applyLookbookFilter(grid);
+
+  // The bar is rebuilt on every snapshot (scroll resets), so on narrow screens
+  // bring the active tab back into view — e.g. a shared ?category= link.
+  const group = mount.querySelector(".lookbook-filter-group");
+  const activeBtn = mount.querySelector(".lookbook-filter-btn.is-active");
+  if (group && activeBtn && group.scrollWidth > group.clientWidth) {
+    group.scrollLeft = Math.max(0, activeBtn.offsetLeft - 24);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PHASE 4: LIVE LOOKBOOK STREAM
 // Replaces static HTML cards with a real-time onSnapshot from "collections".
 // Dynamically renders cards with S/M/L/XL/XXL size toggles + live price switching.
@@ -649,15 +765,21 @@ function mountLookbookStream() {
         </div>
         ${ctaCard}
       `;
+      renderLookbookFilters(new Map(), atelierGrid);
       return;
     }
 
     let cardsHtml = "";
+    const categoryTally = new Map(); // slug → { label, count } for in-stock pieces only
     snapshot.forEach((colDoc) => {
       const d     = colDoc.data();
       const docId = colDoc.id;
 
       if (d.stockStatus === "Out of Stock") return;
+
+      const category = resolveCategory(d);
+      const tallied  = categoryTally.get(category.slug);
+      categoryTally.set(category.slug, { label: category.label, count: (tallied?.count || 0) + 1 });
 
       const prices = d.prices || {};
       const sizes  = ["S", "M", "L", "XL", "XXL"];
@@ -682,7 +804,7 @@ function mountLookbookStream() {
       }).join("");
 
       cardsHtml += `
-        <article class="atelier-card" itemscope itemtype="https://schema.org/Product" data-collection-id="${docId}">
+        <article class="atelier-card" itemscope itemtype="https://schema.org/Product" data-collection-id="${docId}" data-category="${escapeHtml(category.slug)}">
           <div class="product-media">
             <img
               src="${d.imageUrl || ''}"
@@ -739,6 +861,7 @@ function mountLookbookStream() {
     });
 
     atelierGrid.innerHTML = cardsHtml + ctaCard;
+    renderLookbookFilters(categoryTally, atelierGrid);
 
     // ── Size switch click events ──────────────────────────────────────────────
     atelierGrid.querySelectorAll(".lookbook-size-group").forEach(group => {
@@ -783,7 +906,11 @@ function mountLookbookStream() {
     });
 
     // ── TASK 3B: Acquire Piece delegated click listener ───────────────────────
-    atelierGrid.addEventListener("click", async (e) => {
+    // The grid node persists across snapshots; binding on every snapshot stacked
+    // duplicate handlers (multiple checkout modals). Bind exactly once.
+    const acquireAlreadyBound = atelierGrid.dataset.acquireBound === "1";
+    atelierGrid.dataset.acquireBound = "1";
+    if (!acquireAlreadyBound) atelierGrid.addEventListener("click", async (e) => {
       const acquireBtn = e.target.closest(".btn-acquire-piece");
       if (!acquireBtn) return;
 

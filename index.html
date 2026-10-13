@@ -33,11 +33,13 @@
     
     <header class="atelier-header">
         <div class="header-container">
-            <a href="index.html" class="brand-logo" aria-label="Suit Boss Fashion Home">
-                <span class="brand-logo-3d-wrap">
-                    <img src="/images/suitboss-logo.svg" alt="Suit Boss" class="brand-logo-img">
-                </span>
-            </a>
+            <a href="index.html" class="brand-logo brand-lockup" aria-label="Suit Boss Fashion Home">
+            <span class="brand-mark" aria-hidden="true">
+                <img src="/images/suitboss-logo.svg" alt="" class="brand-mark-img">
+            </span>
+            <span class="brand-divider" aria-hidden="true"></span>
+            <span class="brand-wordmark">SuitBos</span>
+        </a>
             <nav aria-label="Primary Lookbook Navigation">
                 <ul class="nav-links">
                     <li><a href="index.html">Lookbook</a></li>
@@ -92,6 +94,74 @@
                 <h1 class="hero-title">Wear Your Power. Autonomy In Every Stitch.</h1>
                 <a href="custom-order.html" class="btn-premium-pill">Explore Pre-Orders</a>
             </div>
+
+            <!-- Hero showcase: eight featured-piece cards.
+                 Tapping a card opens its image in an on-page preview (no navigation).
+                 TO SET THE IMAGE: change the img src (or save your file under the path
+                   already there, e.g. /images/hero-card-1.jpg). Until the file exists the
+                   card shows its dark placeholder panel and does nothing when tapped.
+                 TO DESCRIBE THE PIECE: edit the aria-label on the <button> and the alt on
+                   the <img> (e.g. "Ivory brocade kaftan"). -->
+            <div class="hero-showcase" role="region" aria-label="Featured pieces">
+                <ul class="hero-showcase-track">
+                    <li class="hero-showcase-item" style="--i: 0">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 1 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-1.webp" alt="Featured piece 1" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 1">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 2 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-2.webp" alt="Featured piece 2" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 2">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 3 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-3.webp" alt="Featured piece 3" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 3">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 4 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-4.webp" alt="Featured piece 4" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 4">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 5 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-5.webp" alt="Featured piece 5" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 5">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 6 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-6.webp" alt="Featured piece 6" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 6">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 7 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-7.webp" alt="Featured piece 7" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                    <li class="hero-showcase-item" style="--i: 7">
+                        <button type="button" class="hero-showcase-card" aria-label="View featured piece 8 of 8" aria-haspopup="dialog">
+                            <span class="hero-showcase-media">
+                                <img src="/images/hero-card-8.webp" alt="Featured piece 8" loading="lazy" decoding="async" onerror="this.hidden=true">
+                            </span>
+                        </button>
+                    </li>
+                </ul>
+            </div>
         </section>
 
         <section class="storefront-section" aria-label="Apparel Matrix Collections">
@@ -99,6 +169,11 @@
                 <h2 class="section-title">Ready-to-Wear Heritage</h2>
                 <p>Select clean silhouettes tailored from curated African prints and premium classic global fabrics.</p>
             </header>
+
+            <!-- Category filter bar. Rendered by renderLookbookFilters() in app.js from
+                 the categories admins assign in Inventory; stays hidden until there are
+                 at least two categories to choose between. -->
+            <div id="lookbook-filter-mount" class="lookbook-filter-mount" hidden></div>
 
             <!-- PHASE 4: Live Lookbook Stream Mount Point
                  Static cards removed. app.js mounts a real-time onSnapshot
@@ -210,6 +285,295 @@
          app.js populates and unhides this element when .btn-acquire-piece is clicked.
          Kept hidden at page load; display toggled entirely by JS. -->
     <div id="ready-order-modal-portal" class="atelier-modal-portal" style="display: none;"></div>
+
+    <!-- Hero showcase preview. Native <dialog>: focus is trapped, Esc closes,
+         and focus returns to the card that opened it. Driven by the script below. -->
+    <dialog class="showcase-viewer" id="showcase-viewer" aria-label="Featured piece preview">
+        <button type="button" class="showcase-viewer-btn showcase-viewer-close" id="showcase-viewer-close" aria-label="Close preview">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M5 5l14 14M19 5L5 19"></path></svg>
+        </button>
+        <button type="button" class="showcase-viewer-btn showcase-viewer-prev" id="showcase-viewer-prev" aria-label="Previous piece">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
+        </button>
+        <figure class="showcase-viewer-stage">
+            <img src="" alt="" id="showcase-viewer-img" class="showcase-viewer-img">
+        </figure>
+        <button type="button" class="showcase-viewer-btn showcase-viewer-next" id="showcase-viewer-next" aria-label="Next piece">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"></path></svg>
+        </button>
+    </dialog>
+
+    <script>
+        /**
+         * HERO SHOWCASE — auto-advancing row + image preview
+         *
+         * ROW: advances one card at a time. The first card leaves on the left
+         * and re-enters from the right (the cards are duplicated once so the
+         * row loops seamlessly). After each move it holds for HOLD_MS, then
+         * moves again. It stays still while a mouse hovers it, a finger or
+         * keyboard is on it, the preview is open, the tab is hidden, or the
+         * hero is scrolled out of view. Reduced-motion users get no
+         * auto-advance (and no duplicate cards).
+         *
+         * PREVIEW: tapping a card enlarges its image in place (no navigation).
+         * Cards whose image file is missing are skipped.
+         *
+         * Self-contained and presentational: deliberately not routed through app.js.
+         */
+        (function () {
+            var track = document.querySelector('.hero-showcase-track');
+            if (!track) return;
+
+            // ── TIMING (milliseconds) — tune here ─────────────────────────────
+            var HOLD_MS       = 10000; // pause between moves
+            var SCROLL_MS     = 1400;  // how long one move takes
+            var FIRST_MOVE_MS = 3000;  // wait before the very first move after page load
+            var STEP_CARDS    = 1;     // cards per move
+
+            var originals = Array.prototype.slice.call(track.querySelectorAll('.hero-showcase-item'));
+            var cards = originals.map(function (li) { return li.querySelector('.hero-showcase-card'); });
+            var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+            // Reasons the row must hold still. Any true value = paused.
+            var s = { hover: false, touch: false, focus: false, modal: false, offscreen: false };
+
+            // ── PREVIEW ───────────────────────────────────────────────────────
+            var viewer = document.getElementById('showcase-viewer');
+            var canPreview = viewer && typeof viewer.showModal === 'function';
+
+            if (canPreview) {
+                var viewerImg = document.getElementById('showcase-viewer-img');
+                var prevBtn = document.getElementById('showcase-viewer-prev');
+                var nextBtn = document.getElementById('showcase-viewer-next');
+                var closeBtn = document.getElementById('showcase-viewer-close');
+                var current = -1;
+
+                var hasImage = function (card) {
+                    var img = card.querySelector('img');
+                    return !!img && !img.hidden && !!img.getAttribute('src');
+                };
+                var available = function () { return cards.filter(hasImage); };
+
+                var show = function (card) {
+                    var img = card.querySelector('img');
+                    viewerImg.src = img.currentSrc || img.src;
+                    viewerImg.alt = img.alt || '';
+                    current = cards.indexOf(card);
+                    var multiple = available().length > 1;
+                    prevBtn.hidden = !multiple;
+                    nextBtn.hidden = !multiple;
+                };
+
+                var step = function (direction) {
+                    var list = available();
+                    if (list.length < 2) return;
+                    var pos = list.indexOf(cards[current]);
+                    show(list[(pos + direction + list.length) % list.length]);
+                };
+
+                // Delegated so the looping duplicate cards open the right image too
+                track.addEventListener('click', function (e) {
+                    var btn = e.target.closest('.hero-showcase-card');
+                    if (!btn) return;
+                    var li = btn.closest('.hero-showcase-item');
+                    var origin = li.hasAttribute('data-clone-of') ? cards[+li.getAttribute('data-clone-of')] : btn;
+                    if (!origin || !hasImage(origin)) return;
+                    show(origin);
+                    viewer.showModal();
+                    document.body.style.overflow = 'hidden';
+                    s.modal = true;
+                    sync();
+                });
+
+                prevBtn.addEventListener('click', function () { step(-1); });
+                nextBtn.addEventListener('click', function () { step(1); });
+                closeBtn.addEventListener('click', function () { viewer.close(); });
+
+                // Click on the dimmed area (the dialog itself, not its contents) closes
+                viewer.addEventListener('click', function (e) {
+                    if (e.target === viewer) viewer.close();
+                });
+
+                viewer.addEventListener('keydown', function (e) {
+                    if (e.key === 'ArrowLeft') step(-1);
+                    if (e.key === 'ArrowRight') step(1);
+                });
+
+                // Fires for every way of closing (button, Esc, backdrop)
+                viewer.addEventListener('close', function () {
+                    document.body.style.overflow = '';
+                    viewerImg.removeAttribute('src');
+                    s.modal = false;
+                    sync();
+                });
+            }
+
+            // ── AUTO-ADVANCING ROW ────────────────────────────────────────────
+            var N = originals.length;
+            var timer = null;
+            var raf = null;
+            var lastProgrammatic = 0;
+            var releaseTimer = null;
+
+            function sync() { /* replaced below once the ticker is initialised */ }
+            if (reduceMotion || N < 2) return;
+
+            // Duplicate the set once so the row can loop endlessly
+            originals.forEach(function (li, i) {
+                var clone = li.cloneNode(true);
+                clone.setAttribute('aria-hidden', 'true');
+                clone.setAttribute('data-clone-of', String(i));
+                clone.querySelector('.hero-showcase-card').setAttribute('tabindex', '-1');
+                track.appendChild(clone);
+            });
+
+            function now() { return window.performance ? performance.now() : Date.now(); }
+
+            // step = distance from one card to the next; set = width of one full set
+            function measure() {
+                var kids = track.children;
+                var x0 = kids[0].getBoundingClientRect().left;
+                return {
+                    step: kids[1].getBoundingClientRect().left - x0,
+                    set: kids[N].getBoundingClientRect().left - x0
+                };
+            }
+
+            function setScroll(value) {
+                lastProgrammatic = now();
+                track.scrollLeft = value;
+            }
+
+            // Once a full set has scrolled by, jump back one set: identical content, so invisible
+            function normalize() {
+                var m = measure();
+                if (track.scrollLeft >= m.set - 0.5) setScroll(track.scrollLeft - m.set);
+            }
+
+            function cancelAnim() {
+                if (raf) { cancelAnimationFrame(raf); raf = null; }
+            }
+
+            function animateTo(target, duration, done) {
+                cancelAnim();
+                var from = track.scrollLeft;
+                var t0 = null;
+                function frame(ts) {
+                    if (t0 === null) t0 = ts;
+                    var p = Math.min(1, (ts - t0) / duration);
+                    var eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // easeInOutCubic
+                    setScroll(from + (target - from) * eased);
+                    if (p < 1) {
+                        raf = requestAnimationFrame(frame);
+                    } else {
+                        raf = null;
+                        if (done) done();
+                    }
+                }
+                raf = requestAnimationFrame(frame);
+            }
+
+            function blocked() {
+                return s.hover || s.touch || s.focus || s.modal || s.offscreen || document.hidden;
+            }
+
+            function schedule(delay) {
+                clearTimeout(timer);
+                timer = setTimeout(tick, delay);
+            }
+
+            function tick() {
+                timer = null;
+                if (blocked()) return;
+                var m = measure();
+                var base = Math.round(track.scrollLeft / m.step) * m.step;
+                animateTo(base + m.step * STEP_CARDS, SCROLL_MS, function () {
+                    normalize();
+                    schedule(HOLD_MS);
+                });
+            }
+
+            // If the row was frozen mid-move (hover, touch, resume), finish onto the next card edge
+            function settle(done) {
+                var m = measure();
+                var cur = track.scrollLeft;
+                var target = Math.ceil(cur / m.step - 0.02) * m.step;
+                if (Math.abs(target - cur) > 1) {
+                    animateTo(target, 600, function () { normalize(); done(); });
+                } else {
+                    done();
+                }
+            }
+
+            sync = function (first) {
+                clearTimeout(timer);
+                timer = null;
+                if (blocked()) { cancelAnim(); return; }
+                settle(function () { schedule(first === true ? FIRST_MOVE_MS : HOLD_MS); });
+            };
+
+            // Mouse hover holds the row still
+            track.addEventListener('pointerenter', function (e) {
+                if (e.pointerType === 'mouse') { s.hover = true; sync(); }
+            });
+            track.addEventListener('pointerleave', function (e) {
+                if (e.pointerType === 'mouse') { s.hover = false; sync(); }
+            });
+
+            // Finger on the row: hold still, and resume HOLD-style once the swipe settles
+            function userActive() {
+                if (!s.touch) { s.touch = true; sync(); }
+                clearTimeout(releaseTimer);
+                releaseTimer = setTimeout(function () {
+                    s.touch = false;
+                    normalize();
+                    sync();
+                }, 900);
+            }
+            track.addEventListener('touchstart', function () {
+                // Make room to swipe backwards from the very first card
+                var m = measure();
+                if (track.scrollLeft < m.step) setScroll(track.scrollLeft + m.set);
+                userActive();
+            }, { passive: true });
+            track.addEventListener('touchend', userActive, { passive: true });
+            track.addEventListener('scroll', function () {
+                if (raf || now() - lastProgrammatic < 120) return; // our own movement
+                userActive();
+            }, { passive: true });
+
+            // Keyboard focus holds the row still
+            track.addEventListener('focusin', function (e) {
+                var visible = false;
+                try { visible = e.target.matches(':focus-visible'); } catch (err) { /* older browsers */ }
+                if (visible) { s.focus = true; sync(); }
+            });
+            track.addEventListener('focusout', function () {
+                if (s.focus) { s.focus = false; sync(); }
+            });
+
+            // Don't animate unseen: hidden tab, or hero scrolled out of view
+            document.addEventListener('visibilitychange', function () { sync(); });
+            if ('IntersectionObserver' in window) {
+                new IntersectionObserver(function (entries) {
+                    s.offscreen = !entries[0].isIntersecting;
+                    sync();
+                }).observe(track);
+            }
+
+            var resizeTimer = null;
+            window.addEventListener('resize', function () {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(function () {
+                    cancelAnim();
+                    setScroll(0);
+                    sync();
+                }, 200);
+            });
+
+            sync(true);
+        })();
+    </script>
 
 </body>
 

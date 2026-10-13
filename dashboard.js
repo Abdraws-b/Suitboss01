@@ -18,11 +18,35 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 import { db, storage } from "./app.js";
 import { showAtelierNotification } from "./ui-feedback.js";
+import {
+  DEFAULT_CATEGORIES,
+  cleanCategoryLabel,
+  categorySlug,
+  resolveCategory,
+  escapeHtml,
+} from "./category-utils.js";
 import { initClientChat, initAdminChat, teardownChatWidget } from "./chat-engine.js";
 
 // Ensure global operational tracking hook sits safely at window runtime space
 if (!window.activeDashboardUnsubscribe) {
   window.activeDashboardUnsubscribe = null;
+}
+
+// Known Lookbook categories (slug → display label). Seeded with defaults and
+// extended from live inventory so the admin field can suggest existing
+// categories — this is what prevents "Kaftan" / "kaftans" / "Kaftans " from
+// becoming three separate filters on the public Lookbook.
+const knownCategoryLabels = new Map(
+  DEFAULT_CATEGORIES.map((label) => [categorySlug(label), label])
+);
+
+function refreshCategoryDatalist() {
+  const list = document.getElementById("inv-category-options");
+  if (!list) return;
+  list.innerHTML = [...knownCategoryLabels.values()]
+    .sort((a, b) => a.localeCompare(b))
+    .map((label) => `<option value="${escapeHtml(label)}"></option>`)
+    .join("");
 }
 
 // Secondary tracker for the inventory stream subscription in admin view
@@ -41,6 +65,17 @@ if (!window.activeMetricsUnsubscribe) {
 // the two clobbering each other's listener handle whenever the modal opens.
 if (!window.activeRtwModalUnsubscribe) {
   window.activeRtwModalUnsubscribe = null;
+}
+
+// NEW — Date-search state for the Bespoke and Ready-To-Wear order ledgers.
+// Kept on window (not a plain module `let`) so the currently-typed search
+// date survives the repeated re-renders triggered by onSnapshot firing on
+// every order update, and so it isn't lost if this module is re-evaluated.
+if (typeof window.bespokeOrderDateFilter === "undefined") {
+  window.bespokeOrderDateFilter = "";
+}
+if (typeof window.rtwOrderDateFilter === "undefined") {
+  window.rtwOrderDateFilter = "";
 }
 
 /**
@@ -787,14 +822,18 @@ function mountAdminBespokeSection(pane) {
       <div>
         <p class="dash-section-eyebrow">Tailor Shop Operations</p>
         <h1 class="dash-section-title">Bespoke Orders</h1>
-        <p class="dash-section-sub">All client bespoke submissions streaming live from the production database.</p>
+        <p class="dash-section-sub">All client bespoke submissions streaming live from the production database, grouped by the date they came in.</p>
       </div>
     </div>
+
+    ${buildOrderDateSearchBarHtml("bespoke")}
+
     <div id="admin-orders-stream" class="admin-stream-container">
       <p class="loading-text">Subscribing to master order ledgers...</p>
     </div>
   `;
 
+  wireOrderDateSearchBar("bespoke");
   mountOrdersStream("bespoke");
 }
 
@@ -805,14 +844,18 @@ function mountAdminRtwSection(pane) {
       <div>
         <p class="dash-section-eyebrow">Tailor Shop Operations</p>
         <h1 class="dash-section-title">Ready to Wear</h1>
-        <p class="dash-section-sub">Incoming retail orders placed against stocked Lookbook inventory — shipping details and dispatch messaging.</p>
+        <p class="dash-section-sub">Incoming retail orders placed against stocked Lookbook inventory, grouped by the date they came in — shipping details and dispatch messaging.</p>
       </div>
     </div>
+
+    ${buildOrderDateSearchBarHtml("rtw")}
+
     <div id="admin-rtw-stream" class="admin-stream-container">
       <p class="loading-text">Subscribing to boutique order ledgers...</p>
     </div>
   `;
 
+  wireOrderDateSearchBar("rtw");
   mountReadyToWearOrdersStream(document.getElementById("admin-rtw-stream"));
 }
 
@@ -850,6 +893,22 @@ function mountAdminInventorySection(pane) {
               <option value="printed-apparel">Printed Contemporary Shirt</option>
             </select>
           </div>
+        </div>
+
+        <div class="inv-form-field inv-form-field--full">
+          <label for="inv-category">Lookbook Category</label>
+          <input
+            type="text"
+            id="inv-category"
+            list="inv-category-options"
+            maxlength="32"
+            autocomplete="off"
+            placeholder="e.g. Kaftans"
+            aria-describedby="inv-category-hint"
+            required
+          >
+          <datalist id="inv-category-options"></datalist>
+          <span class="inv-field-hint" id="inv-category-hint">Becomes a filter button on the public Lookbook. Choose an existing category or type a new one.</span>
         </div>
 
         <div class="inv-form-field inv-form-field--full">
@@ -926,6 +985,8 @@ function mountAdminInventorySection(pane) {
       <p class="loading-text" style="padding: 3rem; text-align: center; color: #9a9a9a;">Subscribing to collection registries...</p>
     </div>
   `;
+
+  refreshCategoryDatalist();
 
   // ── INVENTORY FORM TOGGLE ──
   const toggleBtn = document.getElementById("btn-toggle-add-collection");
@@ -1066,6 +1127,10 @@ function mountAdminInventorySection(pane) {
 
     const collectionName = document.getElementById("inv-collection-name").value.trim();
     const silhouetteSlug = document.getElementById("inv-silhouette-slug").value;
+    const rawCategory = cleanCategoryLabel(document.getElementById("inv-category").value);
+    const categoryKey = categorySlug(rawCategory);
+    // Reuse the existing label for a known category so casing stays consistent.
+    const categoryLabel = knownCategoryLabels.get(categoryKey) || rawCategory;
     const pastedImageUrl = urlInput.value.trim();
     const subtitle = document.getElementById("inv-subtitle").value.trim();
 
@@ -1077,6 +1142,10 @@ function mountAdminInventorySection(pane) {
 
     if (!collectionName || !silhouetteSlug) {
       showAtelierNotification("Please complete all required collection fields.", "error");
+      return;
+    }
+    if (!categoryKey) {
+      showAtelierNotification("Please enter a Lookbook category (letters or numbers).", "error");
       return;
     }
     if (imageSourceMode === "upload" && !selectedImageFile) {
@@ -1114,6 +1183,8 @@ function mountAdminInventorySection(pane) {
       const collectionPayload = {
         collectionName,
         silhouetteSlug,
+        category: categoryLabel,
+        categorySlug: categoryKey,
         imageUrl,
         subtitle: subtitle || "",
         prices: {
@@ -1287,6 +1358,13 @@ function mountInventoryStream() {
   );
 
   window.activeInventoryUnsubscribe = onSnapshot(collectionsQuery, (snapshot) => {
+    // Learn every category currently in use so the admin field can suggest them.
+    snapshot.forEach((colDoc) => {
+      const cat = resolveCategory(colDoc.data());
+      if (!cat.isFallback) knownCategoryLabels.set(cat.slug, cat.label);
+    });
+    refreshCategoryDatalist();
+
     if (snapshot.empty) {
       inventoryStream.innerHTML = `
         <div style="grid-column: 1/-1; text-align: center; padding: 3rem; border: 1px dashed rgba(255,255,255,0.1);">
@@ -1301,6 +1379,7 @@ function mountInventoryStream() {
       const docId = colDoc.id;
       const prices = d.prices || {};
       const sizes = ["S", "M", "L", "XL", "XXL"];
+      const cat = resolveCategory(d);
 
       const sizePriceInputs = sizes.map(sz => `
         <div class="inv-card-size-cell">
@@ -1327,6 +1406,20 @@ function mountInventoryStream() {
           <div class="inv-card-body">
             <h4 class="inv-card-name">${d.collectionName || 'Unnamed Collection'}</h4>
             <p class="inv-card-subtitle">${d.subtitle || formatGarmentName(d.silhouetteSlug)}</p>
+            <div class="inv-card-category">
+              <label class="inv-card-category-label" for="inv-cat-${docId}">Category</label>
+              <input
+                type="text"
+                id="inv-cat-${docId}"
+                class="inv-category-live-input"
+                list="inv-category-options"
+                maxlength="32"
+                autocomplete="off"
+                value="${escapeHtml(cat.label)}"
+                data-doc-id="${docId}"
+                data-original="${escapeHtml(cat.label)}"
+              >
+            </div>
             <div class="inv-card-price-grid">
               ${sizePriceInputs}
             </div>
@@ -1373,6 +1466,40 @@ function mountInventoryStream() {
             showAtelierNotification(`Price update for ${sizeKey} rejected by server.`, "error");
           }
         }, 600);
+      });
+    });
+
+    // ── Bind live category inputs (commit on change: blur / Enter / datalist pick) ──
+    inventoryStream.querySelectorAll(".inv-category-live-input").forEach(input => {
+      input.addEventListener("change", async (e) => {
+        const el = e.target;
+        const original = el.dataset.original;
+        const typed = cleanCategoryLabel(el.value);
+        const key = categorySlug(typed);
+
+        if (!key) {
+          el.value = original;
+          showAtelierNotification("Category can't be empty.", "error");
+          return;
+        }
+        const nextLabel = knownCategoryLabels.get(key) || typed;
+        if (nextLabel === original) {
+          el.value = original;
+          return;
+        }
+
+        try {
+          await updateDoc(doc(db, "collections", el.dataset.docId), {
+            category: nextLabel,
+            categorySlug: key,
+            lastUpdated: serverTimestamp(),
+          });
+          showAtelierNotification(`Category set to ${nextLabel}.`);
+        } catch (err) {
+          console.error("Failed to update category:", err);
+          el.value = original;
+          showAtelierNotification("Category update rejected.", "error");
+        }
       });
     });
 
@@ -1439,6 +1566,142 @@ function mountInventoryStream() {
 }
 
 /**
+ * ─────────────────────────────────────────────────────────────────────────
+ * ORDER DATE GROUPING + SEARCH
+ *
+ * Both admin ledgers (Bespoke and Ready-To-Wear) now bucket their incoming
+ * orders by calendar day — using `orderCreatedTimestamp` — and render a
+ * date-search bar above the stream so the admin can jump straight to every
+ * order that arrived on a given day. Orders within a day are shown in the
+ * order they actually came in (earliest first), while days themselves are
+ * listed most-recent-first so the freshest activity stays at the top.
+ * ─────────────────────────────────────────────────────────────────────────
+ */
+
+/** Renders the "Search by date" bar markup shared by both ledgers. `scope` is "bespoke" or "rtw" and namespaces the element ids. */
+function buildOrderDateSearchBarHtml(scope) {
+  return `
+    <div class="order-date-search-bar">
+      <div class="order-date-search-field">
+        <label for="${scope}-order-date-search">Search by date received</label>
+        <input type="date" id="${scope}-order-date-search" class="order-date-search-input" autocomplete="off">
+      </div>
+      <button type="button" id="${scope}-order-date-clear" class="btn-date-clear">Clear</button>
+      <p class="order-date-search-status" id="${scope}-order-date-status" aria-live="polite"></p>
+    </div>
+  `;
+}
+
+/** Wires the search input + clear button for a ledger scope to the shared filter/apply logic. */
+function wireOrderDateSearchBar(scope) {
+  const input = document.getElementById(`${scope}-order-date-search`);
+  const clearBtn = document.getElementById(`${scope}-order-date-clear`);
+  const filterKey = scope === "rtw" ? "rtwOrderDateFilter" : "bespokeOrderDateFilter";
+  const streamId = scope === "rtw" ? "admin-rtw-stream" : "admin-orders-stream";
+
+  if (input) {
+    input.value = window[filterKey] || "";
+    input.addEventListener("change", (e) => {
+      window[filterKey] = e.target.value || "";
+      applyOrderDateFilter(document.getElementById(streamId), window[filterKey], scope);
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      window[filterKey] = "";
+      if (input) input.value = "";
+      applyOrderDateFilter(document.getElementById(streamId), "", scope);
+    });
+  }
+}
+
+/**
+ * Derives a local-time "YYYY-MM-DD" bucket key from a Firestore Timestamp
+ * (as written by serverTimestamp() on `orderCreatedTimestamp`). Falls back
+ * to null for orders whose timestamp hasn't resolved yet (e.g. an optimistic
+ * local write still pending server confirmation) — those get grouped last,
+ * under "Date Pending".
+ */
+function getOrderDateKey(timestamp) {
+  const jsDate = timestamp?.toDate?.();
+  if (!jsDate || Number.isNaN(jsDate.getTime())) return null;
+  const year = jsDate.getFullYear();
+  const month = String(jsDate.getMonth() + 1).padStart(2, "0");
+  const day = String(jsDate.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Readable heading for a date group, e.g. "September 14, 2026". Mirrors the input's local-time parsing so it never rolls back a day. */
+function formatDateGroupHeading(dateKey) {
+  if (!dateKey) return "Date Pending";
+  const [year, month, day] = dateKey.split("-").map(Number);
+  const parsedDate = new Date(year, month - 1, day);
+  if (Number.isNaN(parsedDate.getTime())) return "Date Pending";
+  return parsedDate.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+}
+
+/**
+ * Groups an array of Firestore QueryDocumentSnapshots (already sorted
+ * newest-first by the caller's query) into date buckets, returning them as
+ * an array of { dateKey, docs } ordered most-recent-day-first. Within each
+ * bucket the docs are reversed to ascending order, so orders render in the
+ * sequence they actually arrived that day rather than newest-first.
+ */
+function groupOrderDocsByDate(sortedDocsDesc) {
+  const buckets = new Map();
+  sortedDocsDesc.forEach((docSnap) => {
+    const dateKey = getOrderDateKey(docSnap.data().orderCreatedTimestamp);
+    const bucketKey = dateKey || "__pending__";
+    if (!buckets.has(bucketKey)) buckets.set(bucketKey, []);
+    buckets.get(bucketKey).push(docSnap);
+  });
+
+  return Array.from(buckets.entries()).map(([bucketKey, docs]) => ({
+    dateKey: bucketKey === "__pending__" ? null : bucketKey,
+    // Reverse so the earliest order of that day comes first ("the order they came in").
+    docs: docs.slice().reverse(),
+  }));
+}
+
+/** Shows/hides rendered `.order-date-group` blocks to match the active search date, and updates the status line + empty-state messaging. `scope` selects which status element and empty-copy to use. */
+function applyOrderDateFilter(containerEl, filterValue, scope) {
+  if (!containerEl) return;
+
+  const groups = containerEl.querySelectorAll(".order-date-group");
+  let visibleDayCount = 0;
+  let visibleOrderCount = 0;
+
+  groups.forEach((group) => {
+    const matches = !filterValue || group.dataset.orderDate === filterValue;
+    group.style.display = matches ? "" : "none";
+    if (matches) {
+      visibleDayCount += 1;
+      visibleOrderCount += group.querySelectorAll(".admin-order-card").length;
+    }
+  });
+
+  let emptyNotice = containerEl.querySelector(".order-date-empty-notice");
+  if (filterValue && visibleDayCount === 0) {
+    if (!emptyNotice) {
+      emptyNotice = document.createElement("p");
+      emptyNotice.className = "empty-notice order-date-empty-notice";
+      containerEl.appendChild(emptyNotice);
+    }
+    emptyNotice.textContent = `No ${scope === "rtw" ? "Ready-To-Wear" : "bespoke"} orders came in on ${formatDateGroupHeading(filterValue)}.`;
+  } else if (emptyNotice) {
+    emptyNotice.remove();
+  }
+
+  const statusEl = document.getElementById(`${scope}-order-date-status`);
+  if (statusEl) {
+    statusEl.textContent = filterValue
+      ? `Showing ${visibleOrderCount} order${visibleOrderCount === 1 ? "" : "s"} from ${formatDateGroupHeading(filterValue)}`
+      : "";
+  }
+}
+
+/**
  * Real-time onSnapshot listener for the master "orders" queue.
  *
  * @param {"bespoke"|"rtw"} mode - which slice of the orders collection to stream.
@@ -1483,8 +1746,19 @@ function mountBespokeOrdersStream(adminStream) {
       return;
     }
 
+    const dateGroups = groupOrderDocsByDate(bespokeDocs);
+
     let adminHtmlBlock = "";
-    bespokeDocs.forEach((orderDoc) => {
+    dateGroups.forEach(({ dateKey, docs }) => {
+      adminHtmlBlock += `
+        <div class="order-date-group" data-order-date="${dateKey || ""}">
+          <div class="order-date-group-header">
+            <h3 class="order-date-heading">${formatDateGroupHeading(dateKey)}</h3>
+            <span class="order-date-count">${docs.length} order${docs.length === 1 ? "" : "s"}</span>
+          </div>
+      `;
+
+      docs.forEach((orderDoc) => {
       const data = orderDoc.data();
       const orderId = orderDoc.id;
       const idShort = orderId.substring(0, 8).toUpperCase();
@@ -1608,9 +1882,16 @@ function mountBespokeOrdersStream(adminStream) {
           </div>
         </div>
       `;
+      });
+
+      adminHtmlBlock += `</div>`; // close .order-date-group
     });
 
     adminStream.innerHTML = adminHtmlBlock;
+
+    // Re-apply whatever date search the admin currently has active, since
+    // onSnapshot re-renders this container on every order/status change.
+    applyOrderDateFilter(adminStream, window.bespokeOrderDateFilter, "bespoke");
 
     // Specs drawer toggles
     adminStream.querySelectorAll(".btn-inspect-metrics").forEach(button => {
@@ -1684,8 +1965,19 @@ function mountReadyToWearOrdersStream(adminStream) {
       return;
     }
 
+    const dateGroups = groupOrderDocsByDate(snapshot.docs);
+
     let rtwHtmlBlock = "";
-    snapshot.forEach((orderDoc) => {
+    dateGroups.forEach(({ dateKey, docs }) => {
+      rtwHtmlBlock += `
+        <div class="order-date-group" data-order-date="${dateKey || ""}">
+          <div class="order-date-group-header">
+            <h3 class="order-date-heading">${formatDateGroupHeading(dateKey)}</h3>
+            <span class="order-date-count">${docs.length} order${docs.length === 1 ? "" : "s"}</span>
+          </div>
+      `;
+
+      docs.forEach((orderDoc) => {
       const data = orderDoc.data();
       const docId = orderDoc.id;
       const orderId = docId;
@@ -1801,9 +2093,16 @@ function mountReadyToWearOrdersStream(adminStream) {
           </div>
         </div>
       `;
+      });
+
+      rtwHtmlBlock += `</div>`; // close .order-date-group
     });
 
     adminStream.innerHTML = rtwHtmlBlock;
+
+    // Re-apply whatever date search the admin currently has active, since
+    // onSnapshot re-renders this container on every order/status change.
+    applyOrderDateFilter(adminStream, window.rtwOrderDateFilter, "rtw");
 
     // Delivery update textareas: autosize as the admin types, same 140px cap
     // and internal-scroll behavior as the chat widget's composer.
