@@ -248,7 +248,12 @@ async function handleAppRouting(user) {
   if (currentHash === "#dashboard" || currentHash === "#account") {
     if (user) {
       try {
-        const { mountAtelierDashboard } = await import("./dashboard.js");
+        // "?v=" is a cache-buster: this module is loaded by dynamic import(), so
+        // without a version in its URL a browser can keep running an old cached
+        // dashboard.js after a deploy. Keep in step with DASHBOARD_BUILD in
+        // dashboard.js. (Only dashboard.js is versioned — app.js must keep one
+        // single URL so the Firebase app is never initialised twice.)
+        const { mountAtelierDashboard } = await import("./dashboard.js?v=20261014-cloudinary-1");
         // THE FIX: mountAtelierDashboard is an async function that does real
         // work after its own first await (fetching the user's profile doc to
         // decide admin vs. client view, then mounting one or the other). This

@@ -6,17 +6,19 @@ import {
   orderBy,
   doc,
   getDoc,
-  addDoc,
+  setDoc,
   updateDoc,
   deleteDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
+import { db, auth, authReady } from "./app.js";
 import {
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
-import { db, storage } from "./app.js";
+  createProductImageClient,
+  validateProductImageFile,
+  withTimeout,
+  ProductImageError,
+  removeProductAndImage,
+} from "./product-image-upload.js?v=20261014-cloudinary-1";
 import { showAtelierNotification } from "./ui-feedback.js";
 import {
   DEFAULT_CATEGORIES,
@@ -26,6 +28,26 @@ import {
   escapeHtml,
 } from "./category-utils.js";
 import { initClientChat, initAdminChat, teardownChatWidget } from "./chat-engine.js";
+
+// Build marker — lets you confirm which dashboard.js a browser is really running
+// (DevTools console: window.__suitbossDashboardBuild). The "?v=" on the helper
+// import above and on app.js's import("./dashboard.js") must carry this same
+// value; bump all three together on every deploy so cached copies can't mix.
+export const DASHBOARD_BUILD = "20261014-cloudinary-1";
+window.__suitbossDashboardBuild = DASHBOARD_BUILD;
+console.info("[Suitboss] dashboard build", DASHBOARD_BUILD);
+
+// Product images are uploaded through the secured PHP endpoint (Cloudinary).
+// The endpoint derives the user from the verified Firebase ID token and
+// re-checks users/{uid}.systemAccessLevel === "admin" server-side.
+const productImageClient = createProductImageClient({
+  getIdToken: async (forceRefresh) => {
+    await authReady;
+    const user = auth.currentUser;
+    if (!user) throw new Error("Not signed in.");
+    return user.getIdToken(Boolean(forceRefresh));
+  },
+});
 
 // Ensure global operational tracking hook sits safely at window runtime space
 if (!window.activeDashboardUnsubscribe) {
@@ -927,7 +949,7 @@ function mountAdminInventorySection(pane) {
                 <line x1="12" y1="3" x2="12" y2="15"></line>
               </svg>
               <span class="inv-file-drop-text" id="inv-file-drop-text">Click to choose an image, or drag one here</span>
-              <span class="inv-file-drop-hint">JPG, PNG, or WEBP — up to 5MB</span>
+              <span class="inv-file-drop-hint">JPG, PNG, or WEBP — up to 8MB</span>
               <input type="file" id="inv-image-file" accept="image/png,image/jpeg,image/webp" hidden>
             </label>
           </div>
@@ -940,6 +962,7 @@ function mountAdminInventorySection(pane) {
             <img src="" alt="Garment preview" class="inv-image-preview" id="inv-image-preview">
             <button type="button" class="inv-image-preview-clear" id="inv-image-preview-clear" aria-label="Remove selected image">&times;</button>
           </div>
+          <p id="inv-upload-status" role="status" aria-live="polite" style="display: none; margin-top: 0.6rem; font-size: var(--font-size-small);"></p>
         </div>
 
         <div class="inv-form-field inv-form-field--full">
@@ -1010,7 +1033,11 @@ function mountAdminInventorySection(pane) {
   let selectedImageFile = null;
   let imageSourceMode = "upload";
 
-  const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB — matches the Storage rules limit
+  // Upload/save workflow state (see the submit handler).
+  let isSubmitting = false;     // blocks duplicate submissions and mid-flight edits
+  let uploadedImage = null;     // { url, publicId, file } — on Cloudinary, not yet saved to Firestore
+  let pendingProductRef = null; // stable document id so a retried save can never create a duplicate
+  let saveUncertain = false;    // a save timed out and may still have landed — never delete its image
 
   const sourceToggleBtns = document.querySelectorAll(".inv-image-source-btn");
   const sourcePanels     = document.querySelectorAll(".inv-image-source-panel");
@@ -1021,8 +1048,36 @@ function mountAdminInventorySection(pane) {
   const previewWrap      = document.getElementById("inv-image-preview-wrap");
   const previewImg       = document.getElementById("inv-image-preview");
   const previewClearBtn  = document.getElementById("inv-image-preview-clear");
+  const uploadStatusEl   = document.getElementById("inv-upload-status");
+
+  function setUploadStatus(message, tone = "info") {
+    if (!message) {
+      uploadStatusEl.style.display = "none";
+      uploadStatusEl.textContent = "";
+      return;
+    }
+    uploadStatusEl.textContent = message;
+    uploadStatusEl.style.color = tone === "error" ? "#c0392b" : tone === "success" ? "#16a34a" : "inherit";
+    uploadStatusEl.style.display = "block";
+  }
+
+  // Remove an image that was uploaded but never attached to a saved product.
+  // Best-effort and silent: a failed cleanup only leaves an unused file.
+  function discardUploadedImage() {
+    const orphan = uploadedImage;
+    uploadedImage = null;
+    if (!orphan) return;
+    if (saveUncertain) {
+      console.warn("Keeping uploaded image: a product save may have succeeded.", orphan.publicId);
+      return;
+    }
+    pendingProductRef = null;
+    setUploadStatus("");
+    productImageClient.deleteImage(orphan.publicId);
+  }
 
   function resetImagePicker() {
+    discardUploadedImage();
     selectedImageFile = null;
     imageSourceMode = "upload";
     fileInput.value = "";
@@ -1055,15 +1110,15 @@ function mountAdminInventorySection(pane) {
   }
 
   function applySelectedFile(file) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showAtelierNotification("Please choose an image file (JPG, PNG, or WEBP).", "error");
+    if (!file || isSubmitting) return;
+    const problem = validateProductImageFile(file);
+    if (problem) {
+      showAtelierNotification(problem, "error");
+      fileInput.value = "";
       return;
     }
-    if (file.size > MAX_IMAGE_BYTES) {
-      showAtelierNotification("That image is over 5MB — please choose a smaller file.", "error");
-      return;
-    }
+    // A different file invalidates any image already uploaded for this form.
+    if (uploadedImage && uploadedImage.file !== file) discardUploadedImage();
     selectedImageFile = file;
     dropZoneText.textContent = file.name;
     updateImagePreview();
@@ -1071,6 +1126,8 @@ function mountAdminInventorySection(pane) {
 
   sourceToggleBtns.forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (isSubmitting) return;
+      if (btn.dataset.source !== "upload") discardUploadedImage();
       imageSourceMode = btn.dataset.source;
       sourceToggleBtns.forEach((b) => {
         b.classList.toggle("is-active", b === btn);
@@ -1106,6 +1163,7 @@ function mountAdminInventorySection(pane) {
     });
   });
   dropZone.addEventListener("drop", (e) => {
+    if (isSubmitting) return;
     const file = e.dataTransfer?.files?.[0];
     if (file) applySelectedFile(file);
   });
@@ -1113,6 +1171,8 @@ function mountAdminInventorySection(pane) {
   urlInput.addEventListener("input", () => updateImagePreview());
 
   previewClearBtn.addEventListener("click", () => {
+    if (isSubmitting) return;
+    discardUploadedImage();
     selectedImageFile = null;
     fileInput.value = "";
     urlInput.value = "";
@@ -1161,24 +1221,45 @@ function mountAdminInventorySection(pane) {
       return;
     }
 
+    // ── Duplicate-submission guard: ignore anything while a request is in flight ──
+    if (isSubmitting) return;
+    isSubmitting = true;
+
     const submitBtn = addCollectionForm.querySelector("button[type='submit']");
-    submitBtn.disabled = true;
+    const idleLabel = () => (uploadedImage ? "Retry Saving Collection" : "Lock Collection to Registry");
+    const setBusy = (label) => {
+      submitBtn.disabled = true;
+      cancelBtn.disabled = true;
+      fileInput.disabled = true;
+      submitBtn.textContent = label;
+    };
+
+    let stage = "upload"; // "upload" | "save" — decides which error message applies
 
     try {
       let imageUrl;
+      let imagePublicId = null;
 
-      if (imageSourceMode === "upload" && selectedImageFile) {
-        submitBtn.textContent = "Uploading image...";
-        const extension = selectedImageFile.name.split(".").pop();
-        const storagePath = `collection-images/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
-        const imageStorageRef = storageRef(storage, storagePath);
-        await uploadBytes(imageStorageRef, selectedImageFile);
-        imageUrl = await getDownloadURL(imageStorageRef);
+      if (imageSourceMode === "upload") {
+        if (!uploadedImage || uploadedImage.file !== selectedImageFile) {
+          setBusy("Uploading image...");
+          setUploadStatus("Uploading image — please keep this page open...");
+          const uploaded = await productImageClient.upload(selectedImageFile);
+          uploadedImage = { url: uploaded.imageUrl, publicId: uploaded.publicId, file: selectedImageFile };
+          setUploadStatus("Image uploaded.", "success");
+        }
+        imageUrl = uploadedImage.url;
+        imagePublicId = uploadedImage.publicId;
       } else {
         imageUrl = pastedImageUrl;
       }
 
-      submitBtn.textContent = "Registering Collection...";
+      stage = "save";
+      setBusy("Registering Collection...");
+
+      // One stable document id per form attempt: if a save is retried, setDoc
+      // rewrites the SAME document instead of creating a second product.
+      if (!pendingProductRef) pendingProductRef = doc(collection(db, "collections"));
 
       const collectionPayload = {
         collectionName,
@@ -1186,6 +1267,7 @@ function mountAdminInventorySection(pane) {
         category: categoryLabel,
         categorySlug: categoryKey,
         imageUrl,
+        ...(imagePublicId ? { imagePublicId } : {}),
         subtitle: subtitle || "",
         prices: {
           S:   priceS,
@@ -1198,25 +1280,53 @@ function mountAdminInventorySection(pane) {
         lastUpdated: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "collections"), collectionPayload);
+      await withTimeout(
+        setDoc(pendingProductRef, collectionPayload),
+        30000,
+        "Saving is taking longer than expected."
+      );
+
+      // Saved: the image now belongs to a product, so it must never be cleaned up.
+      uploadedImage = null;
+      pendingProductRef = null;
+      saveUncertain = false;
 
       showAtelierNotification(`Collection "${collectionName}" locked into the live registry.`);
       addCollectionForm.reset();
       resetImagePicker();
+      setUploadStatus("");
       addDrawer.style.display = "none";
       toggleBtn.querySelector("span").textContent = "+ Add New Collection";
     } catch (err) {
-      console.error("Collection write failure:", err);
-      const isStorageError = err?.code?.startsWith?.("storage/");
-      showAtelierNotification(
-        isStorageError
-          ? "Image upload rejected. Check your connection and try again."
-          : "Registry write rejected. Check permissions.",
-        "error"
-      );
+      console.error(`Collection ${stage} failure:`, err);
+
+      if (stage === "upload") {
+        const message = err instanceof ProductImageError
+          ? err.message
+          : "The image could not be uploaded. Please try again.";
+        setUploadStatus(message, "error");
+        showAtelierNotification(message, "error");
+      } else if (err instanceof ProductImageError && err.code === "timeout") {
+        // The write may still reach the server — keep the image and the same
+        // document id so a retry is safe and cannot duplicate the product.
+        saveUncertain = true;
+        const message = "Saving is taking longer than expected. Check the inventory list below, then press the button again if the collection isn't there.";
+        setUploadStatus(message, "error");
+        showAtelierNotification(message, "error");
+      } else {
+        const permission = err?.code === "permission-denied";
+        const message = permission
+          ? "Registry write rejected. Check permissions — the image is uploaded and will be kept for a retry."
+          : "The image uploaded but the collection could not be saved. Press the button again to retry; the image won't be uploaded twice.";
+        setUploadStatus(message, "error");
+        showAtelierNotification(message, "error");
+      }
     } finally {
+      isSubmitting = false;
+      fileInput.disabled = false;
+      cancelBtn.disabled = false;
       submitBtn.disabled = false;
-      submitBtn.textContent = "Lock Collection to Registry";
+      submitBtn.textContent = idleLabel();
     }
   });
 
@@ -1432,6 +1542,8 @@ function mountInventoryStream() {
                 class="btn-delete-inventory"
                 data-doc-id="${docId}"
                 data-name="${d.collectionName || 'this collection'}"
+                data-image-public-id="${escapeHtml(d.imagePublicId || '')}"
+                data-image-url="${escapeHtml(d.imageUrl || '')}"
               >Remove from Registry</button>
             </div>
           </div>
@@ -1541,19 +1653,52 @@ function mountInventoryStream() {
         );
         if (!confirmed) return;
 
-        e.currentTarget.disabled = true;
-        e.currentTarget.textContent = "Removing...";
+        // e.currentTarget is null after the first await, so capture it now.
+        const deleteBtn = e.currentTarget;
+        if (deleteBtn.disabled) return; // a removal for this card is already running
+        const imagePublicId = deleteBtn.dataset.imagePublicId || "";
+        const imageUrl = deleteBtn.dataset.imageUrl || "";
+        deleteBtn.disabled = true;
+        deleteBtn.textContent = "Removing...";
 
         try {
-          await deleteDoc(doc(db, "collections", itemId));
+          // Order matters: the Cloudinary image is deleted (and confirmed) FIRST.
+          // If that fails the Firestore record is left intact, so nothing is lost
+          // and pressing "Remove from Registry" again is a safe retry.
+          await removeProductAndImage({
+            client: productImageClient,
+            imagePublicId,
+            imageUrl,
+            deleteRecord: () => deleteDoc(doc(db, "collections", itemId)),
+          });
           // Sleek success notification on complete deletion
           showAtelierNotification(`"${itemName}" has been cleanly removed from the registry.`);
           // The live onSnapshot listener automatically removes the card from the DOM.
         } catch (err) {
-          console.error("Collection deletion failure:", err);
-          showAtelierNotification("Deletion rejected by the server. Check permissions.", "error");
-          e.currentTarget.disabled = false;
-          e.currentTarget.textContent = "Remove from Registry";
+          // Diagnostics only: ids and codes, never tokens or credentials.
+          console.error("Collection removal failure:", {
+            itemId,
+            stage: err?.stage || "unknown",
+            code: err?.code,
+            status: err?.status,
+            publicId: err?.publicId || imagePublicId || null,
+            cause: err?.cause?.message || err?.message,
+          });
+          if (err?.stage === "image") {
+            showAtelierNotification(
+              `${err.message} "${escapeHtml(itemName)}" was NOT removed — press Remove again to retry.`,
+              "error"
+            );
+          } else if (err?.stage === "record") {
+            showAtelierNotification(
+              "The product image was removed but the registry entry could not be deleted. Check permissions, then press Remove again to finish.",
+              "error"
+            );
+          } else {
+            showAtelierNotification("Deletion rejected by the server. Check permissions.", "error");
+          }
+          deleteBtn.disabled = false;
+          deleteBtn.textContent = "Remove from Registry";
         }
       });
     });
