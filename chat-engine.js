@@ -12,7 +12,7 @@ import {
   increment,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
 import { auth, db } from "./app.js";
-import { showAtelierNotification } from "./ui-feedback.js";
+import { showAtelierNotification, showAtelierConfirm } from "./ui-feedback.js";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GLOBAL STREAM TRACKERS
@@ -515,7 +515,12 @@ async function handleBubbleMenuAction(action, messageId) {
   }
 
   if (action === "delete") {
-    const confirmed = window.confirm("Delete this message? This can't be undone.");
+    const confirmed = await showAtelierConfirm({
+      title: "Delete this message?",
+      message: "The message will be removed from the conversation for both of you. This can't be undone.",
+      confirmLabel: "Delete message",
+      tone: "danger",
+    });
     if (!confirmed) return;
     try {
       await updateDoc(doc(db, "conversations", conversationId, "messages", messageId), {

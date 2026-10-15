@@ -307,13 +307,13 @@
         /**
          * HERO SHOWCASE — auto-advancing row + image preview
          *
-         * ROW: advances one card at a time. The first card leaves on the left
-         * and re-enters from the right (the cards are duplicated once so the
-         * row loops seamlessly). After each move it holds for HOLD_MS, then
-         * moves again. It stays still while a mouse hovers it, a finger or
-         * keyboard is on it, the preview is open, the tab is hidden, or the
-         * hero is scrolled out of view. Reduced-motion users get no
-         * auto-advance (and no duplicate cards).
+         * ROW: a continuous marquee. The cards drift steadily from right to
+         * left at a constant speed and loop endlessly (the cards are
+         * duplicated once so the row wraps seamlessly). It stops the instant
+         * a mouse hovers it and resumes when the mouse leaves. It also holds
+         * still while a finger or keyboard is on it, the preview is open, the
+         * tab is hidden, or the hero is scrolled out of view. Reduced-motion
+         * users get no auto-scroll (and no duplicate cards).
          *
          * PREVIEW: tapping a card enlarges its image in place (no navigation).
          * Cards whose image file is missing are skipped.
@@ -325,10 +325,7 @@
             if (!track) return;
 
             // ── TIMING (milliseconds) — tune here ─────────────────────────────
-            var HOLD_MS       = 10000; // pause between moves
-            var SCROLL_MS     = 1400;  // how long one move takes
-            var FIRST_MOVE_MS = 3000;  // wait before the very first move after page load
-            var STEP_CARDS    = 1;     // cards per move
+            var SPEED_PX_S = 45; // drift speed in pixels per second (higher = faster)
 
             var originals = Array.prototype.slice.call(track.querySelectorAll('.hero-showcase-item'));
             var cards = originals.map(function (li) { return li.querySelector('.hero-showcase-card'); });
@@ -410,10 +407,12 @@
 
             // ── AUTO-ADVANCING ROW ────────────────────────────────────────────
             var N = originals.length;
-            var timer = null;
             var raf = null;
             var lastProgrammatic = 0;
             var releaseTimer = null;
+            var pos = 0;        // our own float scroll position (scrollLeft can round to whole pixels)
+            var lastTs = null;
+            var setWidth = 0;   // width of one full set of cards
 
             function sync() { /* replaced below once the ticker is initialised */ }
             if (reduceMotion || N < 2) return;
@@ -452,64 +451,35 @@
 
             function cancelAnim() {
                 if (raf) { cancelAnimationFrame(raf); raf = null; }
-            }
-
-            function animateTo(target, duration, done) {
-                cancelAnim();
-                var from = track.scrollLeft;
-                var t0 = null;
-                function frame(ts) {
-                    if (t0 === null) t0 = ts;
-                    var p = Math.min(1, (ts - t0) / duration);
-                    var eased = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2; // easeInOutCubic
-                    setScroll(from + (target - from) * eased);
-                    if (p < 1) {
-                        raf = requestAnimationFrame(frame);
-                    } else {
-                        raf = null;
-                        if (done) done();
-                    }
-                }
-                raf = requestAnimationFrame(frame);
+                lastTs = null;
             }
 
             function blocked() {
                 return s.hover || s.touch || s.focus || s.modal || s.offscreen || document.hidden;
             }
 
-            function schedule(delay) {
-                clearTimeout(timer);
-                timer = setTimeout(tick, delay);
+            // One frame of the marquee: move left at a constant speed, wrap seamlessly
+            function frame(ts) {
+                raf = null;
+                if (blocked()) { lastTs = null; return; }
+                if (lastTs === null) lastTs = ts;
+                var dt = Math.min(ts - lastTs, 64) / 1000; // clamp so a lag spike can't jump the row
+                lastTs = ts;
+                pos += SPEED_PX_S * dt;
+                if (pos >= setWidth) pos -= setWidth;
+                setScroll(pos);
+                raf = requestAnimationFrame(frame);
             }
 
-            function tick() {
-                timer = null;
-                if (blocked()) return;
-                var m = measure();
-                var base = Math.round(track.scrollLeft / m.step) * m.step;
-                animateTo(base + m.step * STEP_CARDS, SCROLL_MS, function () {
-                    normalize();
-                    schedule(HOLD_MS);
-                });
-            }
-
-            // If the row was frozen mid-move (hover, touch, resume), finish onto the next card edge
-            function settle(done) {
-                var m = measure();
-                var cur = track.scrollLeft;
-                var target = Math.ceil(cur / m.step - 0.02) * m.step;
-                if (Math.abs(target - cur) > 1) {
-                    animateTo(target, 600, function () { normalize(); done(); });
-                } else {
-                    done();
-                }
-            }
-
-            sync = function (first) {
-                clearTimeout(timer);
-                timer = null;
+            // Start or stop the drift depending on whether anything is holding the row still
+            sync = function () {
                 if (blocked()) { cancelAnim(); return; }
-                settle(function () { schedule(first === true ? FIRST_MOVE_MS : HOLD_MS); });
+                if (raf) return; // already drifting
+                normalize();
+                setWidth = measure().set;
+                pos = track.scrollLeft;
+                lastTs = null;
+                raf = requestAnimationFrame(frame);
             };
 
             // Mouse hover holds the row still
@@ -571,7 +541,7 @@
                 }, 200);
             });
 
-            sync(true);
+            sync();
         })();
     </script>
 

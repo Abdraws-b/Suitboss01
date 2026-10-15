@@ -5967,3 +5967,134 @@ body.atelier-drawer-open {
     transition: none;
   }
 }
+
+/* ==========================================================================
+   IN-APP CONFIRM DIALOG — showAtelierConfirm() in ui-feedback.js
+   Replaces the browser's native window.confirm() popup.
+   ========================================================================== */
+.atelier-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200; /* above the toast layer */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(11, 19, 32, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: atelierConfirmFade 0.2s ease forwards;
+}
+
+.atelier-confirm-overlay.is-closing {
+  animation: atelierConfirmFadeOut 0.18s ease forwards;
+  pointer-events: none;
+}
+
+.atelier-confirm-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 2rem 2rem 1.5rem;
+  background: var(--color-primary);
+  color: var(--color-bg-canvas);
+  border: 1px solid rgba(197, 168, 128, 0.25);
+  border-top: 3px solid var(--color-accent);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  font-family: var(--font-body);
+  animation: modalSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.atelier-confirm-card.is-danger {
+  border-top-color: #ef4444;
+}
+
+.atelier-confirm-title {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.atelier-confirm-message {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: rgba(251, 251, 250, 0.75);
+}
+
+.atelier-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+.atelier-confirm-btn {
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.7rem 1.4rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all 0.25s ease;
+}
+
+.atelier-confirm-cancel {
+  background: transparent;
+  color: var(--color-bg-canvas);
+  border: 1px solid rgba(251, 251, 250, 0.3);
+}
+
+.atelier-confirm-cancel:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.atelier-confirm-ok {
+  background: var(--color-accent);
+  color: var(--color-primary);
+  border: 1px solid var(--color-accent);
+}
+
+.atelier-confirm-card.is-danger .atelier-confirm-ok {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.atelier-confirm-ok:hover {
+  filter: brightness(1.1);
+}
+
+.atelier-confirm-btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@keyframes atelierConfirmFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes atelierConfirmFadeOut {
+  to { opacity: 0; }
+}
+
+@media (max-width: 480px) {
+  .atelier-confirm-actions {
+    flex-direction: column-reverse;
+  }
+  .atelier-confirm-btn {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atelier-confirm-overlay,
+  .atelier-confirm-card {
+    animation: none;
+  }
+}

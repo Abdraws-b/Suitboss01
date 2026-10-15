@@ -26,7 +26,7 @@ import {
   formatInches,
   holdsLegacyCentimetres,
 } from "./measurement-units.js?v=20261014-inches-1";
-import { showAtelierNotification } from "./ui-feedback.js";
+import { showAtelierNotification, showAtelierConfirm } from "./ui-feedback.js";
 import {
   DEFAULT_CATEGORIES,
   cleanCategoryLabel,
@@ -1663,13 +1663,16 @@ function mountInventoryStream() {
         const itemId   = e.currentTarget.dataset.docId;
         const itemName = e.currentTarget.dataset.name;
 
-        const confirmed = window.confirm(
-          `Permanently remove "${itemName}" from the collection registry?\n\nThis action cannot be reversed.`
-        );
+        // e.currentTarget is null after any await, so capture the button first.
+        const deleteBtn = e.currentTarget;
+        const confirmed = await showAtelierConfirm({
+          title: `Remove "${itemName}"?`,
+          message: "This permanently removes the piece and its image from the collection registry. This action cannot be reversed.",
+          confirmLabel: "Remove piece",
+          tone: "danger",
+        });
         if (!confirmed) return;
 
-        // e.currentTarget is null after the first await, so capture it now.
-        const deleteBtn = e.currentTarget;
         if (deleteBtn.disabled) return; // a removal for this card is already running
         const imagePublicId = deleteBtn.dataset.imagePublicId || "";
         const imageUrl = deleteBtn.dataset.imageUrl || "";
@@ -2469,19 +2472,40 @@ function wireOrderUtilityBarHandlers(adminStream) {
 
   adminStream.querySelectorAll(".btn-delete-order").forEach((button) => {
     button.addEventListener("click", async (e) => {
-      const targetOrderId = e.currentTarget.dataset.id;
+      // e.currentTarget is null once the handler awaits, so capture everything now.
+      // (Reading it again inside the catch used to throw a TypeError, which hid
+      // the real error and left the button stuck disabled.)
+      const deleteBtn = e.currentTarget;
+      const targetOrderId = deleteBtn.dataset.id;
       const idShort = targetOrderId.substring(0, 8).toUpperCase();
-      const confirmed = window.confirm(`Delete order SB-${idShort}? This cannot be undone.`);
+      if (deleteBtn.disabled) return;
+
+      const confirmed = await showAtelierConfirm({
+        title: `Delete order SB-${idShort}?`,
+        message: "The order will be permanently removed from the ledger and the client's dashboard. This cannot be undone.",
+        confirmLabel: "Delete order",
+        tone: "danger",
+      });
       if (!confirmed) return;
 
-      e.currentTarget.disabled = true;
+      const originalHtml = deleteBtn.innerHTML;
+      deleteBtn.disabled = true;
+      deleteBtn.querySelector("span").textContent = "Deleting...";
+
       try {
         await deleteDoc(doc(db, "orders", targetOrderId));
         showAtelierNotification(`Order SB-${idShort} deleted.`);
+        // The live onSnapshot listener removes the card once Firestore confirms.
       } catch (err) {
-        console.error("Failed to delete order:", err);
-        e.currentTarget.disabled = false;
-        showAtelierNotification("Server rejected the delete request.", "error");
+        console.error("Failed to delete order:", { orderId: targetOrderId, code: err?.code, message: err?.message });
+        deleteBtn.disabled = false;
+        deleteBtn.innerHTML = originalHtml;
+        showAtelierNotification(
+          err?.code === "permission-denied"
+            ? "Delete blocked by Firestore security rules. Allow admin deletes on the orders collection."
+            : "Could not delete the order. Check your connection and try again.",
+          "error"
+        );
       }
     });
   });
