@@ -2,8 +2,10 @@
  * PRODUCT IMAGE UPLOAD CLIENT
  *
  * Browser-side client for the Suitboss PHP image endpoints:
- *   POST /api/cloudinary-upload.php  (multipart/form-data, field "image")
- *   POST /api/cloudinary-delete.php  (JSON { publicId })
+ *   POST /api/cloudinary-upload.php            (admin: product photos; multipart, field "image")
+ *   POST /api/cloudinary-delete.php            (admin: JSON { publicId })
+ *   POST /api/cloudinary-reference-upload.php  (any signed-in customer: bespoke reference photo)
+ *   POST /api/cloudinary-reference-delete.php  (customer: delete their OWN unsaved reference photo)
  *
  * Deliberately has NO Firebase or DOM imports. The caller injects
  * `getIdToken(forceRefresh)`, which keeps this file testable in Node and
@@ -170,6 +172,7 @@ function messageForDeleteStatus(status, code) {
 }
 
 function messageForStatus(status, serverMessage) {
+  if (status === 429) return "Too many uploads in a short time. Please wait a few minutes and try again.";
   if (status === 401) return "Your session has expired. Please sign in again and retry.";
   if (status === 403) return "Administrator access is required to upload product images.";
   if (status === 413) return "That image is over 8MB — please choose a smaller file.";
@@ -187,6 +190,9 @@ function messageForStatus(status, serverMessage) {
  * @param {number}   [opts.uploadTimeoutMs=90000]
  * @param {number}   [opts.deleteTimeoutMs=20000]
  * @param {number}   [opts.tokenTimeoutMs=15000]
+ * @param {string}   [opts.uploadEndpoint="cloudinary-upload.php"]
+ * @param {string}   [opts.deleteEndpoint="cloudinary-delete.php"]
+ * @param {(id: string) => boolean} [opts.isValidPublicId]  which public ids removeImage() will accept
  */
 export function createProductImageClient({
   getIdToken,
@@ -195,6 +201,9 @@ export function createProductImageClient({
   uploadTimeoutMs = 90000,
   deleteTimeoutMs = 20000,
   tokenTimeoutMs = 15000,
+  uploadEndpoint = "cloudinary-upload.php",
+  deleteEndpoint = "cloudinary-delete.php",
+  isValidPublicId = isValidProductImagePublicId,
 } = {}) {
   if (typeof getIdToken !== "function") {
     throw new TypeError("createProductImageClient requires a getIdToken function.");
@@ -292,7 +301,7 @@ export function createProductImageClient({
     if (problem) throw new ProductImageError(problem, { code: "invalid-file" });
 
     const { res, body } = await authedRequest(
-      `${endpointBase}/cloudinary-upload.php`,
+      `${endpointBase}/${uploadEndpoint}`,
       (token) => {
         const form = new FormData();
         form.append("image", file, file.name || "upload");
@@ -333,12 +342,12 @@ export function createProductImageClient({
    * The response body is validated; HTTP 200 alone is not treated as success.
    */
   async function removeImage(publicId) {
-    if (!isValidProductImagePublicId(publicId)) {
+    if (!isValidPublicId(publicId)) {
       throw new ProductImageError("The product image reference is invalid.", { code: "invalid-public-id" });
     }
 
     const { res, body } = await authedRequest(
-      `${endpointBase}/cloudinary-delete.php`,
+      `${endpointBase}/${deleteEndpoint}`,
       (token) => ({
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -383,4 +392,62 @@ export function createProductImageClient({
   }
 
   return { upload, removeImage, deleteImage };
+}
+
+// ── BESPOKE REFERENCE IMAGES (customer-facing) ───────────────────────────────
+export const REFERENCE_IMAGE_FOLDER = "suitboss/bespoke-references";
+const REFERENCE_PUBLIC_ID_PATTERN = /^suitboss\/bespoke-references\/[a-f0-9]{16}-[a-f0-9]{16}$/;
+
+/** True only for ids the reference-delete endpoint can ever accept. */
+export function isValidReferenceImagePublicId(value) {
+  return typeof value === "string" && REFERENCE_PUBLIC_ID_PATTERN.test(value);
+}
+
+/**
+ * Client for the Apparel Silhouette reference photo. Same hardening as the
+ * product client (token, timeouts, validation) but pointed at the endpoints
+ * any SIGNED-IN customer may use — the server derives ownership from the
+ * verified token, never from anything sent here.
+ */
+export function createReferenceImageClient(opts = {}) {
+  return createProductImageClient({
+    ...opts,
+    uploadEndpoint: "cloudinary-reference-upload.php",
+    deleteEndpoint: "cloudinary-reference-delete.php",
+    isValidPublicId: isValidReferenceImagePublicId,
+  });
+}
+
+/**
+ * Holds ONE uploaded-but-not-yet-saved image so that:
+ *   - a retried save re-uses the same Cloudinary upload (no duplicate files),
+ *   - choosing a different file / removing the image deletes the unused upload,
+ *   - a successful save calls commit() so the image is never cleaned up.
+ */
+export function createImageUploadSlot(client) {
+  let current = null; // { file, imageUrl, publicId }
+  return {
+    get current() { return current; },
+
+    /** Uploads `file` unless this exact file is already uploaded. Throws ProductImageError on failure. */
+    async ensure(file) {
+      if (current && current.file === file) {
+        return { imageUrl: current.imageUrl, publicId: current.publicId };
+      }
+      if (current) this.discard();
+      const uploaded = await client.upload(file);
+      current = { file, imageUrl: uploaded.imageUrl, publicId: uploaded.publicId };
+      return uploaded;
+    },
+
+    /** Best-effort delete of the unsaved upload (never throws; not awaited by callers). */
+    discard() {
+      const orphan = current;
+      current = null;
+      return orphan ? client.deleteImage(orphan.publicId) : Promise.resolve(false);
+    },
+
+    /** The image now belongs to a saved record — forget it WITHOUT deleting. */
+    commit() { current = null; },
+  };
 }

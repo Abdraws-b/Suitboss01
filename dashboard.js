@@ -18,7 +18,14 @@ import {
   withTimeout,
   ProductImageError,
   removeProductAndImage,
-} from "./product-image-upload.js?v=20261014-cloudinary-1";
+} from "./product-image-upload.js?v=20261014-inches-1";
+import {
+  MEASUREMENT_UNIT,
+  unitOf,
+  groupToInches,
+  formatInches,
+  holdsLegacyCentimetres,
+} from "./measurement-units.js?v=20261014-inches-1";
 import { showAtelierNotification } from "./ui-feedback.js";
 import {
   DEFAULT_CATEGORIES,
@@ -33,7 +40,7 @@ import { initClientChat, initAdminChat, teardownChatWidget } from "./chat-engine
 // (DevTools console: window.__suitbossDashboardBuild). The "?v=" on the helper
 // import above and on app.js's import("./dashboard.js") must carry this same
 // value; bump all three together on every deploy so cached copies can't mix.
-export const DASHBOARD_BUILD = "20261014-cloudinary-1";
+export const DASHBOARD_BUILD = "20261014-inches-1";
 window.__suitbossDashboardBuild = DASHBOARD_BUILD;
 console.info("[Suitboss] dashboard build", DASHBOARD_BUILD);
 
@@ -623,8 +630,14 @@ function mountClientNotificationsSection(pane, uid) {
 /** My Profile — the measurement blueprint editor, unchanged from before, just relocated into its own section. */
 function mountClientProfileSection(pane, userDocRef, profileData) {
   const blueprint = profileData.measurementBlueprint || {};
-  const upperBody = blueprint.upperBody || {};
-  const lowerBody = blueprint.lowerBody || {};
+  // Older blueprints were saved in cm with no unit marker; show them in inches so
+  // the form (and the next save) is always in inches.
+  const blueprintUnit = unitOf(blueprint);
+  const upperBody = groupToInches(blueprint.upperBody, blueprintUnit);
+  const lowerBody = groupToInches(blueprint.lowerBody, blueprintUnit);
+  const blueprintConvertedNote = holdsLegacyCentimetres(blueprint)
+    ? `<p class="dash-section-sub" style="margin: 0 0 1rem;">Your earlier measurements were recorded in centimetres and are shown here converted to inches (1 in = 2.54 cm). Review them, then save to keep them in inches.</p>`
+    : "";
 
   pane.innerHTML = `
     <div class="dash-section-header">
@@ -636,55 +649,56 @@ function mountClientProfileSection(pane, userDocRef, profileData) {
       <div class="client-meta-badge">Profile: ${profileData.email || 'Bespoke Client'}</div>
     </div>
     <div class="dashboard-card-pane dash-section-body">
-      <h3 class="card-pane-title">Archived Blueprint Proportions</h3>
+      <h3 class="card-pane-title">Archived Blueprint Proportions (inches)</h3>
+      ${blueprintConvertedNote}
       <form id="dashboard-blueprint-form" class="blueprint-inline-form">
         <div class="blueprint-input-grid">
           <div class="metric-input-field">
-            <label for="dash-neck">Neck (cm)</label>
+            <label for="dash-neck">Neck (in)</label>
             <input type="number" id="dash-neck" value="${upperBody.neck ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-chest">Chest (cm)</label>
+            <label for="dash-chest">Chest (in)</label>
             <input type="number" id="dash-chest" value="${upperBody.chest ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-across-back-shoulder">Across Back / Shoulder (cm)</label>
+            <label for="dash-across-back-shoulder">Across Back / Shoulder (in)</label>
             <input type="number" id="dash-across-back-shoulder" value="${upperBody.acrossBackShoulder ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-sleeve-length">Sleeve Length (cm)</label>
+            <label for="dash-sleeve-length">Sleeve Length (in)</label>
             <input type="number" id="dash-sleeve-length" value="${upperBody.sleeveLength ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-top-length">Top Length (cm)</label>
+            <label for="dash-top-length">Top Length (in)</label>
             <input type="number" id="dash-top-length" value="${upperBody.topLength ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-around-arm">Around Arm (cm)</label>
+            <label for="dash-around-arm">Around Arm (in)</label>
             <input type="number" id="dash-around-arm" value="${upperBody.aroundArm ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-wrist">Wrist (cm)</label>
+            <label for="dash-wrist">Wrist (in)</label>
             <input type="number" id="dash-wrist" value="${upperBody.wrist ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-waist">Waist (cm)</label>
+            <label for="dash-waist">Waist (in)</label>
             <input type="number" id="dash-waist" value="${lowerBody.waist ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-length">Length (cm)</label>
+            <label for="dash-length">Length (in)</label>
             <input type="number" id="dash-length" value="${lowerBody.length ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-thigh">Thigh (cm)</label>
+            <label for="dash-thigh">Thigh (in)</label>
             <input type="number" id="dash-thigh" value="${lowerBody.thigh ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-knee">Knee (cm)</label>
+            <label for="dash-knee">Knee (in)</label>
             <input type="number" id="dash-knee" value="${lowerBody.knee ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
           <div class="metric-input-field">
-            <label for="dash-bar-ankle">Bar/Ankle (cm)</label>
+            <label for="dash-bar-ankle">Bar/Ankle (in)</label>
             <input type="number" id="dash-bar-ankle" value="${lowerBody.barAnkle ?? ''}" step="0.1" min="0" placeholder="--">
           </div>
         </div>
@@ -738,6 +752,7 @@ function mountClientProfileSection(pane, userDocRef, profileData) {
         measurementBlueprint: {
           upperBody: freshUpperBody,
           lowerBody: freshLowerBody,
+          unit: MEASUREMENT_UNIT, // values are inches; records without a unit are legacy cm
           lastUpdated: serverTimestamp()
         }
       });
@@ -1912,8 +1927,14 @@ function mountBespokeOrdersStream(adminStream) {
       // Older commissions predate the Upper/Lower Body restructure and the
       // Atelier Specification, so every lookup below falls back gracefully
       // rather than throwing on a missing nested object.
-      const upperMetrics = data.tailoringMetrics?.upperBody || {};
-      const lowerMetrics = data.tailoringMetrics?.lowerBody || {};
+      // Orders placed before the inch switch hold cm (no unit marker); convert them
+      // so the tailor always reads inches, with a visible note when that happened.
+      const metricsUnit = unitOf(data.tailoringMetrics);
+      const upperMetrics = groupToInches(data.tailoringMetrics?.upperBody, metricsUnit);
+      const lowerMetrics = groupToInches(data.tailoringMetrics?.lowerBody, metricsUnit);
+      const metricsConvertedNote = holdsLegacyCentimetres(data.tailoringMetrics)
+        ? `<p class="pipeline-label" style="margin: 0.4rem 0 0; text-transform: none; letter-spacing: normal;">Recorded in cm by the client; shown converted to inches (1 in = 2.54 cm).</p>`
+        : "";
       const atelierSpec = data.atelierSpecification || {};
       const atelierLabel = formatAtelierName(atelierSpec.selectedAtelier);
 
@@ -2001,23 +2022,24 @@ function mountBespokeOrdersStream(adminStream) {
 
           <button class="btn-inspect-metrics" data-target="drawer-${orderId}">Inspect Specs</button>
           <div id="drawer-${orderId}" class="admin-metrics-drawer" style="display: none;">
+            ${metricsConvertedNote}
             <p class="pipeline-label" style="margin: 0.75rem 0 0.4rem;">Upper Body</p>
             <div class="drawer-inner-grid">
-              <div class="metric-pill"><span>Neck:</span> <strong>${upperMetrics.neck ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Chest:</span> <strong>${upperMetrics.chest ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Across Back / Shoulder:</span> <strong>${upperMetrics.acrossBackShoulder ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Sleeve Length:</span> <strong>${upperMetrics.sleeveLength ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Top Length:</span> <strong>${upperMetrics.topLength ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Around Arm:</span> <strong>${upperMetrics.aroundArm ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Wrist:</span> <strong>${upperMetrics.wrist ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Neck:</span> <strong>${formatInches(upperMetrics.neck)}</strong></div>
+              <div class="metric-pill"><span>Chest:</span> <strong>${formatInches(upperMetrics.chest)}</strong></div>
+              <div class="metric-pill"><span>Across Back / Shoulder:</span> <strong>${formatInches(upperMetrics.acrossBackShoulder)}</strong></div>
+              <div class="metric-pill"><span>Sleeve Length:</span> <strong>${formatInches(upperMetrics.sleeveLength)}</strong></div>
+              <div class="metric-pill"><span>Top Length:</span> <strong>${formatInches(upperMetrics.topLength)}</strong></div>
+              <div class="metric-pill"><span>Around Arm:</span> <strong>${formatInches(upperMetrics.aroundArm)}</strong></div>
+              <div class="metric-pill"><span>Wrist:</span> <strong>${formatInches(upperMetrics.wrist)}</strong></div>
             </div>
             <p class="pipeline-label" style="margin: 0.75rem 0 0.4rem;">Lower Body</p>
             <div class="drawer-inner-grid">
-              <div class="metric-pill"><span>Waist:</span> <strong>${lowerMetrics.waist ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Length:</span> <strong>${lowerMetrics.length ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Thigh:</span> <strong>${lowerMetrics.thigh ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Knee:</span> <strong>${lowerMetrics.knee ?? '--'} cm</strong></div>
-              <div class="metric-pill"><span>Bar/Ankle:</span> <strong>${lowerMetrics.barAnkle ?? '--'} cm</strong></div>
+              <div class="metric-pill"><span>Waist:</span> <strong>${formatInches(lowerMetrics.waist)}</strong></div>
+              <div class="metric-pill"><span>Length:</span> <strong>${formatInches(lowerMetrics.length)}</strong></div>
+              <div class="metric-pill"><span>Thigh:</span> <strong>${formatInches(lowerMetrics.thigh)}</strong></div>
+              <div class="metric-pill"><span>Knee:</span> <strong>${formatInches(lowerMetrics.knee)}</strong></div>
+              <div class="metric-pill"><span>Bar/Ankle:</span> <strong>${formatInches(lowerMetrics.barAnkle)}</strong></div>
             </div>
             <p class="pipeline-label" style="margin: 0.75rem 0 0.4rem;">Atelier Specification</p>
             <div class="drawer-inner-grid">

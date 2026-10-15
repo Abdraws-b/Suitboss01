@@ -6,13 +6,34 @@ import {
   increment,
   serverTimestamp,
 } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-import {
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-} from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
-import { auth, db, authReady, storage } from "./app.js";
+import { auth, db, authReady } from "./app.js";
 import { showAtelierNotification } from "./ui-feedback.js";
+// "?v=" keeps these helpers in step with this file after a deploy (see DASHBOARD_BUILD
+// in dashboard.js). Only app.js must stay unversioned.
+import {
+  createReferenceImageClient,
+  createImageUploadSlot,
+  validateProductImageFile,
+  ProductImageError,
+} from "./product-image-upload.js?v=20261014-inches-1";
+import { MEASUREMENT_UNIT } from "./measurement-units.js?v=20261014-inches-1";
+
+// Reference photos go to Cloudinary through the signed-in-customer PHP endpoint
+// (/api/cloudinary-reference-upload.php). The server verifies the Firebase ID
+// token and chooses the Cloudinary public id; nothing secret is in the browser.
+const referenceImageClient = createReferenceImageClient({
+  getIdToken: async (forceRefresh) => {
+    await authReady;
+    const user = auth.currentUser;
+    if (!user) throw new Error("Not signed in.");
+    return user.getIdToken(Boolean(forceRefresh));
+  },
+});
+// Remembers an uploaded-but-unsaved reference photo so a retried order re-uses it
+// (no duplicate uploads) and an abandoned one is deleted.
+const silhouetteImageSlot = createImageUploadSlot(referenceImageClient);
+// Blocks a second "Confirm" while a commission is already being written.
+let isFinalizingBespoke = false;
 
 // Holds the validated measurement/garment selection between form submission
 // and the checkout modal's confirmation — the actual Firestore write now
@@ -25,9 +46,8 @@ let pendingBespokeSubmission = null;
 // selection between the moment the customer picks it and the moment the
 // order is actually written — File objects aren't serializable into
 // pendingBespokeSubmission's eventual Firestore payload, so this is tracked
-// separately and only merged in (as an uploaded Storage URL) at submit time.
+// separately and only merged in (as an uploaded Cloudinary URL) at submit time.
 let selectedSilhouetteImageFile = null;
-const MAX_SILHOUETTE_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB — matches the Storage rules limit used elsewhere
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PROPORTION BLUEPRINT — field maps + label constants
@@ -111,7 +131,7 @@ function collectMeasurementGroup(fieldMap) {
 
     const rawValue = inputEl.value;
     if (rawValue === "" || rawValue === null) {
-      firstError = firstError || `Please enter your ${label} measurement.`;
+      firstError = firstError || `Please enter your ${label} measurement in inches.`;
       values[metricKey] = null;
       continue;
     }
@@ -126,7 +146,7 @@ function collectMeasurementGroup(fieldMap) {
     const minBound = inputEl.min !== "" ? parseFloat(inputEl.min) : null;
     const maxBound = inputEl.max !== "" ? parseFloat(inputEl.max) : null;
     if ((minBound !== null && numericValue < minBound) || (maxBound !== null && numericValue > maxBound)) {
-      const rangeNote = minBound !== null && maxBound !== null ? ` (${minBound}cm - ${maxBound}cm)` : "";
+      const rangeNote = minBound !== null && maxBound !== null ? ` (${minBound} - ${maxBound} in)` : "";
       firstError = firstError || `Please enter a realistic ${label} measurement${rangeNote}.`;
       values[metricKey] = null;
       continue;
@@ -188,6 +208,7 @@ function syncCustomStyleField() {
  */
 function clearSelectedSilhouetteImage() {
   selectedSilhouetteImageFile = null;
+  silhouetteImageSlot.discard(); // best-effort delete of an upload that was never saved to an order
   const fileInput = document.getElementById("order-style-image-file");
   const dropZoneText = document.getElementById("order-style-image-drop-text");
   const previewWrap = document.getElementById("order-style-image-preview-wrap");
@@ -215,14 +236,16 @@ function initSilhouetteImagePicker() {
   if (!dropZone || !fileInput || !previewWrap || !previewImg) return;
 
   function applySelectedFile(file) {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showAtelierNotification("Please choose an image file (JPG, PNG, or WEBP).", "error");
+    if (!file || isFinalizingBespoke) return;
+    const problem = validateProductImageFile(file);
+    if (problem) {
+      showAtelierNotification(problem, "error");
+      fileInput.value = "";
       return;
     }
-    if (file.size > MAX_SILHOUETTE_IMAGE_BYTES) {
-      showAtelierNotification("That image is over 5MB — please choose a smaller file.", "error");
-      return;
+    // A different photo makes any already-uploaded one unused.
+    if (silhouetteImageSlot.current && silhouetteImageSlot.current.file !== file) {
+      silhouetteImageSlot.discard();
     }
     selectedSilhouetteImageFile = file;
     if (dropZoneText) dropZoneText.textContent = file.name;
@@ -252,12 +275,16 @@ function initSilhouetteImagePicker() {
     });
   });
   dropZone.addEventListener("drop", (e) => {
+    if (isFinalizingBespoke) return;
     const file = e.dataTransfer?.files?.[0];
     if (file) applySelectedFile(file);
   });
 
   if (previewClearBtn) {
-    previewClearBtn.addEventListener("click", () => clearSelectedSilhouetteImage());
+    previewClearBtn.addEventListener("click", () => {
+      if (isFinalizingBespoke) return;
+      clearSelectedSilhouetteImage();
+    });
   }
 }
 
@@ -363,6 +390,7 @@ export function initOrderCommissionEngine() {
     const dimensionalBlueprint = {
       upperBody: upperBodyResult.values,
       lowerBody: lowerBodyResult.values,
+      unit: MEASUREMENT_UNIT, // every value above is in inches; older records have no unit and mean cm
     };
 
     // 3. Capture the Atelier Specification — the existing Atelier dropdown,
@@ -417,7 +445,7 @@ export function initOrderCommissionEngine() {
     // validated — stash them and move to checkout instead of writing to
     // Firestore immediately. The actual order isn't created until the
     // checkout modal is confirmed. The reference image (if any) travels as
-    // the raw File — it's uploaded to Storage at finalize-time, not here.
+    // the raw File — it's uploaded to Cloudinary at finalize-time, not here.
     pendingBespokeSubmission = {
       dimensionalBlueprint,
       silhouette: styleInput.value,
@@ -602,6 +630,10 @@ async function finalizeBespokeSubmission(checkoutDetails) {
 
   const { dimensionalBlueprint, silhouette, customSilhouetteName, customSilhouetteImageFile, textileProfile, customTextileName, atelierSpecification } = pendingBespokeSubmission;
 
+  // A second click (or Enter) while a commission is being written must do nothing.
+  if (isFinalizingBespoke) return;
+  isFinalizingBespoke = true;
+
   // Change UI state to prevent multi-click replication anomalies
   const submitBtn = document.getElementById("bespoke-modal-submit");
   const originalBtnText = submitBtn ? submitBtn.textContent : "Confirm & Place Commission";
@@ -610,21 +642,25 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     submitBtn.textContent = "Securing Registry Slots...";
   }
 
+  let failedStage = "upload"; // "upload" (reference photo) or "save" (order record)
+
   try {
     // Step A0: Upload the customer's reference image for a Custom
-    // Silhouette, if one was attached. This runs before the order document
-    // is written so the resulting download URL can be saved as part of the
-    // same commission record — mirrors the collection-image upload pattern
-    // already used for admin inventory in dashboard.js.
+    // Silhouette, if one was attached, to Cloudinary via the authenticated
+    // PHP endpoint. This runs before the order document is written so the
+    // resulting secure URL + public id are saved on the same commission
+    // record. The slot re-uses an earlier successful upload on retry, and
+    // every network wait inside is time-limited, so this can never spin forever.
     let customSilhouetteImageUrl = null;
+    let customSilhouetteImagePublicId = null;
     if (customSilhouetteImageFile) {
       if (submitBtn) submitBtn.textContent = "Uploading reference image...";
-      const extension = customSilhouetteImageFile.name.split(".").pop();
-      const storagePath = `bespoke-reference-images/${currentUser.uid}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${extension}`;
-      const imageStorageRef = storageRef(storage, storagePath);
-      await uploadBytes(imageStorageRef, customSilhouetteImageFile);
-      customSilhouetteImageUrl = await getDownloadURL(imageStorageRef);
+      const uploadedReference = await silhouetteImageSlot.ensure(customSilhouetteImageFile);
+      customSilhouetteImageUrl = uploadedReference.imageUrl;
+      customSilhouetteImagePublicId = uploadedReference.publicId;
     }
+
+    failedStage = "save";
 
     if (submitBtn) submitBtn.textContent = "Securing Registry Slots...";
 
@@ -639,6 +675,7 @@ async function finalizeBespokeSubmission(checkoutDetails) {
         silhouette,
         customSilhouetteName,
         customSilhouetteImageUrl,
+        ...(customSilhouetteImagePublicId ? { customSilhouetteImagePublicId } : {}),
         textileProfile,
         customTextileName,
       },
@@ -662,6 +699,7 @@ async function finalizeBespokeSubmission(checkoutDetails) {
       measurementBlueprint: {
         upperBody: dimensionalBlueprint.upperBody,
         lowerBody: dimensionalBlueprint.lowerBody,
+        unit: dimensionalBlueprint.unit,
         lastUpdated: serverTimestamp(),
       },
       activeCommissionsCount: increment(1),
@@ -676,6 +714,8 @@ async function finalizeBespokeSubmission(checkoutDetails) {
       `Commission ${structuralOrderRef.id.substring(0, 6).toUpperCase()} requested successfully!`,
     );
 
+    // The reference photo now belongs to the saved order: never clean it up.
+    silhouetteImageSlot.commit();
     pendingBespokeSubmission = null;
     selectedSilhouetteImageFile = null;
     closeBespokeCheckoutModal();
@@ -687,19 +727,31 @@ async function finalizeBespokeSubmission(checkoutDetails) {
     }, 2000);
 
   } catch (error) {
-    console.error("Studio Commission processing failure event:", error);
-    const isStorageError = error?.code?.startsWith?.("storage/");
-    showAtelierNotification(
-      isStorageError
-        ? "Reference image upload rejected. Check your connection and try again."
-        : "Production server rejected commission payload.",
-      "error",
-    );
-    // Re-enable interface controls if database writes crash out
+    // Diagnostics only: stage + codes, never tokens or credentials.
+    console.error("Studio Commission processing failure event:", {
+      stage: failedStage,
+      code: error?.code,
+      status: error?.status,
+      message: error?.message,
+    });
+    if (failedStage === "upload") {
+      const reason = error instanceof ProductImageError
+        ? error.message
+        : "The reference image could not be uploaded.";
+      showAtelierNotification(
+        `${reason} Press Confirm to try again, or close this window and remove the image to continue without it.`,
+        "error",
+      );
+    } else {
+      showAtelierNotification("Production server rejected commission payload.", "error");
+    }
+    // Re-enable interface controls if the upload or database writes crash out
     if (submitBtn) {
       submitBtn.disabled = false;
       submitBtn.textContent = originalBtnText;
     }
+  } finally {
+    isFinalizingBespoke = false;
   }
 }
 
@@ -729,6 +781,7 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
     custom_silhouette_name: customSilhouetteName || "",
     custom_textile_name: customTextileName || "",
     reference_image_url: referenceImageUrl,
+    measurement_unit: payload.tailoringMetrics?.unit || MEASUREMENT_UNIT,
     neck_metric: upperMetrics.neck,
     chest_metric: upperMetrics.chest,
     across_back_shoulder_metric: upperMetrics.acrossBackShoulder,
@@ -754,6 +807,7 @@ async function dispatchAtelierEmailReceipts(clientEmail, orderToken, payload) {
     custom_silhouette_name: customSilhouetteName || "",
     custom_textile_name: customTextileName || "",
     reference_image_url: referenceImageUrl,
+    measurement_unit: payload.tailoringMetrics?.unit || MEASUREMENT_UNIT,
   };
 
   try {

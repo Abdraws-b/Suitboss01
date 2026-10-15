@@ -20,6 +20,9 @@ import { getStorage } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-
 import { initAuthEngine } from "./auth.js";
 import { showAtelierNotification } from "./ui-feedback.js";
 import { ALL_CATEGORIES, categorySlug, resolveCategory, escapeHtml } from "./category-utils.js";
+// Measurements are stored/shown in inches; records saved earlier were cm (no unit marker).
+// "?v=" is a cache-buster for helper modules — never add it to app.js itself.
+import { unitOf, groupToInches } from "./measurement-units.js?v=20261014-inches-1";
 // order-engine.js and dashboard.js are intentionally NOT statically imported
 // here — see the AUTH-html-breaks-if-order-engine-breaks incident this
 // fixes, explained just below the DOMContentLoaded orchestration.
@@ -253,7 +256,7 @@ async function handleAppRouting(user) {
         // dashboard.js after a deploy. Keep in step with DASHBOARD_BUILD in
         // dashboard.js. (Only dashboard.js is versioned — app.js must keep one
         // single URL so the Firebase app is never initialised twice.)
-        const { mountAtelierDashboard } = await import("./dashboard.js?v=20261014-cloudinary-1");
+        const { mountAtelierDashboard } = await import("./dashboard.js?v=20261014-inches-1");
         // THE FIX: mountAtelierDashboard is an async function that does real
         // work after its own first await (fetching the user's profile doc to
         // decide admin vs. client view, then mounting one or the other). This
@@ -987,7 +990,9 @@ document.addEventListener("DOMContentLoaded", () => {
   //    order-engine.js should never be able to take down auth.js's own
   //    initialization on pages (like auth.html) that don't even have this form.
   if (document.getElementById("bespoke-proportion-form")) {
-    import("./order-engine.js")
+    // "?v=" cache-buster: without it a browser can keep running an old cached
+    // order-engine.js (same issue as dashboard.js). Keep in step with DASHBOARD_BUILD.
+    import("./order-engine.js?v=20261014-inches-1")
       .then(({ initOrderCommissionEngine }) => initOrderCommissionEngine())
       .catch((err) => {
         console.error("Order engine module failed to load:", err);
@@ -1080,8 +1085,11 @@ document.addEventListener("DOMContentLoaded", () => {
         activeBlueprintUnsubscribe = onSnapshot(userDocRef, (docSnap) => {
           if (docSnap.exists() && docSnap.data().measurementBlueprint) {
             const blueprint = docSnap.data().measurementBlueprint;
-            const upperBody = blueprint.upperBody || {};
-            const lowerBody = blueprint.lowerBody || {};
+            // Saved blueprints may still be in cm (no unit marker): convert so the
+            // form — which is in inches — never shows or re-saves a cm number as inches.
+            const storedUnit = unitOf(blueprint);
+            const upperBody = groupToInches(blueprint.upperBody, storedUnit);
+            const lowerBody = groupToInches(blueprint.lowerBody, storedUnit);
             const fieldMappings = {
               "measure-neck":                   upperBody.neck,
               "measure-chest":                  upperBody.chest,
@@ -1099,7 +1107,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             for (const [elementId, metricValue] of Object.entries(fieldMappings)) {
               const inputElement = document.getElementById(elementId);
-              if (inputElement && metricValue !== null && document.activeElement !== inputElement) {
+              if (inputElement && metricValue !== null && metricValue !== undefined && document.activeElement !== inputElement) {
                 inputElement.value = metricValue;
               }
             }
